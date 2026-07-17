@@ -7,3 +7,6 @@ How it works:
 - Use the Transfer function to move grain between compartments at an adjustable speed.
 - Silo extensions are supported and appear as extra compartments in the same menu, these can also be configured.
 - In multiplayer only the admin (logged in via the multiplayer menu) can change the silo settings. Other players can use the silo normally and view the compartment overview.
+
+
+for modders that want to intergrate it in there silo mod follow this link https://github.com/JoVink82/FS25_realSilo/blob/main/README_modders.md
