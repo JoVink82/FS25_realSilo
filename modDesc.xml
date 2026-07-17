@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="utf-8" standalone="no"?>
+<modDesc descVersion="110">
+    <author>Jo_Vink</author>
+    <version>1.0.0.0</version>
+    <title>
+        <en>RealSilo – Realistic Silo Compartments</en>
+        <nl>RealSilo – Realistische Silo Compartimenten</nl>
+        <de>RealSilo – Realistische Siloabteile</de>
+    </title>
+    <description>
+        <en><![CDATA[RealSilo divides your silos into separate compartments, each for one type of product. Instead of mixing everything into one large storage, you decide how many compartments a silo gets and how much each one can hold.
+
+How it works:
+- Go to an existing silo or place a new one, you can now configure the silo. In multiplayer the admin must do this.
+- Grain that was already in a silo before the mod was activated is preserved and distributed across compartments as soon as you configure the silo for the first time.
+- Select the active compartment from the overview. Only the active compartment can now receive or unload grain.
+- Use the Transfer function to move grain between compartments at an adjustable speed.
+- Silo extensions are supported and appear as extra compartments in the same menu, these can also be configured.
+- In multiplayer only the admin (logged in via the multiplayer menu) can change the silo settings. Other players can use the silo normally and view the compartment overview.
+]]></en>
+        <nl><![CDATA[RealSilo verdeelt je silo's in aparte compartimenten, elk voor één productsoort. In plaats van alles door elkaar in één grote opslag te gooien, bepaal jij hoeveel vakken een silo krijgt en hoeveel elk vak kan bevatten.
+
+Hoe het werkt:
+- Ga naar een bestaande silo of plaats een nieuwe silo, je kunt nu de silo configureren, in multiplayer moet de admin dat doen.
+- Graan dat al in een silo zat voordat de mod werd geactiveerd, blijft behouden en wordt over de vakken verdeeld zodra je de silo voor het eerst configureert.
+- Selecteer het actieve vak vanuit het overzicht. Alleen het actieve vak kan nu graan ontvangen of lossen.
+- Gebruik de Transfer-functie om graan tussen vakken te verplaatsen met een instelbare snelheid.
+- Silo-extensions worden ondersteund en verschijnen als extra vakken in hetzelfde menu, ook die kun je configureren.
+- In multiplayer kan alleen de admin (ingelogd via het multiplayermenu) de silo-instellingen wijzigen. Andere spelers kunnen de silo normaal gebruiken en het vakkenoverzicht bekijken.
+]]></nl>
+        <de><![CDATA[RealSilo teilt deine Silos in separate Facher auf, jedes fur eine Produktsorte. Statt alles in einen grossen Speicher zu mischen, bestimmst du, wie viele Facher ein Silo bekommt und wie viel jedes Fach fassen kann.
+
+So funktioniert es:
+- Gehe zu einem bestehenden Silo oder platziere einen neuen, du kannst den Silo jetzt konfigurieren. Im Multiplayer muss das der Admin tun.
+- Getreide, das vor der Mod-Aktivierung bereits im Silo war, bleibt erhalten und wird auf die Facher verteilt, sobald du den Silo zum ersten Mal konfigurierst.
+- Wahle das aktive Fach aus der Ubersicht. Nur das aktive Fach kann jetzt Getreide annehmen oder entladen.
+- Nutze die Transfer-Funktion, um Getreide zwischen Fachern mit einstellbarer Geschwindigkeit zu verschieben.
+- Silo-Erweiterungen werden unterstutzt und erscheinen als zusatzliche Facher im selben Menu, diese konnen ebenfalls konfiguriert werden.
+- Im Multiplayer kann nur der Admin (uber das Multiplayer-Menu eingeloggt) die Silo-Einstellungen andern. Andere Spieler konnen den Silo normal nutzen und die Facherubersicht einsehen.
+]]></de>
+    </description>
+    <multiplayer supported="true"/>
+    <iconFilename>icon_RealSilo.dds</iconFilename>
+
+    <actions>
+        <action name="REALSILO_TRANSFER" axisType="HALF_POSITIVE_AXIS" triggerAlways="false" isSink="true"/>
+    </actions>
+    <inputBinding>
+        <actionBinding action="REALSILO_TRANSFER">
+            <binding device="KB_MOUSE_DEFAULT" input="KEY_t"/>
+        </actionBinding>
+    </inputBinding>
+
+    <extraSourceFiles>
+        <sourceFile filename="scripts/RealSiloDebug.lua"/>
+        <sourceFile filename="scripts/RealSiloUtil.lua"/>
+        <sourceFile filename="scripts/realSiloManager.lua"/>
+        <sourceFile filename="scripts/realSiloCompartmentStorage.lua"/>
+        <sourceFile filename="scripts/realSiloStorageHook.lua"/>
+        <sourceFile filename="scripts/realSiloExtensionManager.lua"/>
+        <sourceFile filename="scripts/realSiloEvents.lua"/>
+        <sourceFile filename="scripts/RealSiloDialog.lua"/>
+        <sourceFile filename="scripts/realSiloActivatable.lua"/>
+        <sourceFile filename="scripts/realSiloHook.lua"/>
+    </extraSourceFiles>
+
+    <l10n filenamePrefix="translations/translation"/>
+</modDesc>

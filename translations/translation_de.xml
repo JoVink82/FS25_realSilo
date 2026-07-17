@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8" standalone="no"?>
+<l10n>
+    <texts>
+        <text name="realSilo_configureAction"    text="Silos anzeigen"/>
+        <text name="realSilo_overview"           text="Ubersicht"/>
+        <text name="realSilo_settings"           text="Einstellungen"/>
+        <text name="realSilo_compartment"        text="Silo"/>
+        <text name="realSilo_empty"              text="Leer"/>
+        <text name="realSilo_activeSlotInfo"     text="Aktives Silo: %d  |  Klicken zum Auswahlen"/>
+        <text name="realSilo_slotActivated"      text="Silo %d ist jetzt aktiv – Einlagerung geht hierhin."/>
+        <text name="realSilo_siloName"           text="Silo-Name:"/>
+        <text name="realSilo_askNumCompartments" text="Anzahl Silos (1-32):"/>
+        <text name="realSilo_askCapacity"        text="Kapazitat pro Silo (Liter):"/>
+        <text name="realSilo_save"               text="Speichern"/>
+        <text name="realSilo_close"              text="Schliessen"/>
+        <text name="realSilo_configSaved"        text="Gespeichert: %d Silos x %s pro Silo"/>
+        <text name="realSilo_configError"        text="Fehler beim Speichern:"/>
+        <text name="realSilo_invalidNumber"      text="Ungultige Zahl. Bitte 1 bis 32 eingeben."/>
+        <text name="realSilo_invalidCapacity"    text="Ungultige Kapazitat. Minimum ist 1000 Liter."/>
+        <text name="realSilo_cantReduce"         text="Silo %d enthalt noch %.0f L – kann nicht entfernt werden."/>
+        <text name="realSilo_mustBeEmpty"        text="Silo muss leer sein, um Anzahl oder Kapazitat zu andern."/>
+        <text name="realSilo_nameSaved"          text="Name gespeichert."/>
+        <text name="realSilo_notEmptyWarning"    text="Silo ist nicht leer - nur der Name kann geandert werden."/>
+        <text name="realSilo_emptyCanChange"     text="Silo ist leer - alle Einstellungen konnen geandert werden."/>
+        <text name="realSilo_extTag"             text="[EXT]"/>
+        <text name="realSilo_firstSetup"         text="Ersteinrichtung"/>
+        <text name="realSilo_activate"           text="Aktivieren"/>
+        <text name="realSilo_enterNumCompartments" text="Anzahl Silos eingeben, um den Silo zu aktivieren."/>
+        <text name="realSilo_mustConfigure"      text="Zuerst die Anzahl Silos einstellen, um den Silo zu nutzen."/>
+        <text name="realSilo_notConfiguredYet"   text="Silo muss vom Admin konfiguriert werden"/>
+        <text name="realSilo_calcResult"         text="%d Silos x %s pro Silo  (gesamt: %s)"/>
+        <text name="realSilo_lockedByMod"        text="Dieses Silo ist vom Mod-Ersteller gesperrt."/>
+        <text name="realSilo_editSlotTitle"      text="Silo %d: %s"/>
+        <text name="realSilo_editSlotFill"       text="Aktueller Inhalt: %s / %s"/>
+        <text name="realSilo_slotCapacity"       text="Kapazitat (Liter):"/>
+        <text name="realSilo_slotCapSaved"       text="Silo %d Kapazitat gespeichert: %s"/>
+        <text name="realSilo_capBelowFill"       text="Kapazitat darf nicht kleiner sein als der aktuelle Inhalt (%s)."/>
+        <text name="realSilo_transfer"           text="Transfer"/>
+        <text name="realSilo_transferStop"       text="Transfer stoppen"/>
+        <text name="realSilo_transferTitle"      text="Transfer einrichten"/>
+        <text name="realSilo_transferHint"       text="Quell- und Zielsilo auswahlen, um Produkt umzupumpen."/>
+        <text name="realSilo_transferActive"     text="Aktiv: Silo %d nach Silo %d @ %s L/min"/>
+        <text name="realSilo_transferFrom"       text="Von Silo (Nr):"/>
+        <text name="realSilo_transferTo"         text="Nach Silo (Nr):"/>
+        <text name="realSilo_transferRate"       text="Geschwindigkeit (L/min):"/>
+        <text name="realSilo_transferStart"      text="Starten"/>
+        <text name="realSilo_transferStarted"    text="Transfer gestartet: Silo %d nach Silo %d @ %s L/min"/>
+        <text name="realSilo_transferStopped"    text="Transfer gestoppt."/>
+        <text name="realSilo_transferRunning"    text="Lauft: Silo %d nach Silo %d @ %s L/min"/>
+        <text name="realSilo_transferInvalidSlot" text="Ungultige Quellsilo-Nummer."/>
+        <text name="realSilo_transferInvalidDest" text="Ungultiges Zielsilo (oder gleich wie Quelle)."/>
+        <text name="realSilo_slotNotEmpty"       text="Dieses Silo enthalt Produkt. Erst leeren, um die Kapazitat zu andern."/>
+        <text name="realSilo_configExtensions"   text="Erweiterungen"/>
+        <text name="realSilo_extensionConfig"    text="Erweiterungskonfiguration"/>
+        <text name="realSilo_extensionConfigHint" text="Anzahl Silos pro Erweiterung einstellen. Kapazitat pro Silo: Im Ubersicht auf das Fach klicken."/>
+        <text name="realSilo_extensionSaved"     text="Erweiterungskapazitat gespeichert."/>
+        <text name="realSilo_extensionAllLocked" text="Alle Erweiterungssilos sind vom Mod festgelegt."/>
+        <text name="realSilo_next"               text="Weiter"/>
+        <text name="realSilo_extMustBeEmpty"     text="Erst Erweiterung leeren, um Silo-Anzahl zu andern."/>
+        <text name="realSilo_defaultName"        text="Silo"/>
+        <text name="realSilo_defaultExtensionName" text="Silo-Erweiterung"/>
+        <text name="realSilo_numCompartmentsLabel" text="Anzahl Silos"/>
+        <text name="realSilo_noPermission"       text="Nur ein Admin kann die Silo-Einstellungen andern."/>
+    </texts>
+</l10n>

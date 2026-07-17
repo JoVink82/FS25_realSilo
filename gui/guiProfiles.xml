@@ -1,0 +1,140 @@
+<?xml version="1.0" encoding="utf-8" standalone="no" ?>
+<GUIProfiles>
+
+    <Profile name="realSiloList" extends="emptyPanel" with="anchorStretchingYLeft pivotTopLeft"/>
+
+    <Profile name="realSiloListItem" extends="baseReference" with="anchorTopStretchingX alternating">
+        <height value="50px"/>
+        <imageColor value="$preset_fs25_colorGrey"/>
+        <imageSelectedColor value="$preset_fs25_colorMainHighlight"/>
+        <alternateBackgroundColor value="$preset_fs25_colorGreyDark_50"/>
+    </Profile>
+
+    <Profile name="realSiloActiveMarker" extends="baseReference" with="anchorStretchingYLeft">
+        <textBold value="true"/>
+        <textSize value="18px"/>
+        <textAlignment value="center"/>
+        <textColor value="$preset_fs25_colorMainHighlight"/>
+        <textSelectedColor value="$preset_fs25_colorMainDark"/>
+    </Profile>
+
+    <Profile name="realSiloFillTypeIcon" extends="emptyPanel" with="anchorTopLeft">
+        <imageColor value="1 1 1 1"/>
+        <imageSelectedColor value="1 1 1 1"/>
+    </Profile>
+
+    <Profile name="realSiloFillTypeName" extends="baseReference" with="anchorTopLeft">
+        <textBold value="false"/>
+        <textSize value="17px"/>
+        <textAlignment value="left"/>
+        <textColor value="$preset_fs25_colorMainLight"/>
+        <textSelectedColor value="$preset_fs25_colorMainDark"/>
+    </Profile>
+
+    <Profile name="realSiloFillLevel" extends="baseReference" with="anchorStretchingYLeft">
+        <textBold value="true"/>
+        <textSize value="16px"/>
+        <textAlignment value="right"/>
+        <textColor value="$preset_fs25_colorMainHighlight"/>
+        <textSelectedColor value="$preset_fs25_colorMainDark"/>
+    </Profile>
+
+    <!-- Info-balk boven de lijst -->
+    <Profile name="realSiloInfoBar" extends="baseReference" with="anchorTopCenter">
+        <textBold value="false"/>
+        <textSize value="16px"/>
+        <textAlignment value="center"/>
+        <textColor value="$preset_colorWhite_50"/>
+    </Profile>
+
+    <!-- Tekstinvoer -->
+    <Profile name="realSiloTextInput" extends="fs25_textInput" with="anchorTopLeft">
+        <textBold value="true"/>
+        <textSize value="18px"/>
+        <textAlignment value="left"/>
+    </Profile>
+
+    <!-- Config pagina panel: anchorTopLeft zodat child-posities van linksboven gaan -->
+    <Profile name="realSiloConfigPanel" extends="emptyPanel" with="anchorTopLeft pivotTopLeft">
+    </Profile>
+
+    <!-- Config labels: links uitgelijnd, anchorTopLeft -->
+    <Profile name="realSiloConfigLabel" extends="baseReference" with="anchorTopLeft">
+        <textBold value="false"/>
+        <textSize value="19px"/>
+        <textAlignment value="left"/>
+        <textColor value="$preset_fs25_colorMainLight"/>
+    </Profile>
+
+    <!-- Waarschuwingstekst config pagina -->
+    <Profile name="realSiloWarningText" extends="baseReference" with="anchorTopCenter">
+        <textBold value="false"/>
+        <textSize value="15px"/>
+        <textAlignment value="center"/>
+        <textColor value="$preset_colorWhite_50"/>
+    </Profile>
+
+
+    <!-- Extension tag label (klein, rechts van productnaam) -->
+    <Profile name="realSiloExtTag" extends="baseReference" with="anchorTopLeft">
+        <textBold value="false"/>
+        <textSize value="13px"/>
+        <textAlignment value="left"/>
+        <textColor value="$preset_colorWhite_50"/>
+        <textSelectedColor value="$preset_fs25_colorMainDark"/>
+    </Profile>
+
+
+    <!-- Berekening tekst op config pagina -->
+    <Profile name="realSiloCalcText" extends="baseReference" with="anchorTopCenter">
+        <textBold value="true"/>
+        <textSize value="17px"/>
+        <textAlignment value="center"/>
+        <textColor value="$preset_fs25_colorMainHighlight"/>
+    </Profile>
+
+
+    <!-- Config lijst -->
+    <Profile name="realSiloConfigList" extends="emptyPanel" with="anchorTopLeft pivotTopLeft"/>
+
+    <Profile name="realSiloConfigRow" extends="baseReference" with="anchorTopStretchingX alternating">
+        <height value="60px"/>
+        <imageColor value="0 0 0 0"/>
+        <imageSelectedColor value="0 0 0 0"/>
+        <alternateBackgroundColor value="$preset_fs25_colorGreyDark_50"/>
+    </Profile>
+
+    <!-- Info rij: iets kleiner -->
+    <Profile name="realSiloConfigRowInfo" extends="realSiloConfigRow">
+        <height value="45px"/>
+    </Profile>
+
+    <Profile name="realSiloConfigRowLabel" extends="baseReference" with="anchorTopLeft">
+        <textBold value="false"/>
+        <textSize value="19px"/>
+        <textAlignment value="left"/>
+        <textColor value="$preset_fs25_colorMainLight"/>
+    </Profile>
+
+    <!-- Vlakke achtergrond achter het invoerveld (zonder fs25_textInput atlas-issues) -->
+    <Profile name="realSiloConfigInputBg" extends="baseReference" with="anchorTopLeft">
+        <imageColor value="1 1 1 0.10"/>
+    </Profile>
+
+    <!-- Invoerveld: groene tekst voor contrast tegen de alternerende rijachtergrond -->
+    <Profile name="realSiloConfigInput" extends="fs25_textInput" with="anchorTopLeft">
+        <textBold value="true"/>
+        <textSize value="19px"/>
+        <textAlignment value="left"/>
+        <textColor value="$preset_fs25_colorMainHighlight"/>
+    </Profile>
+
+
+    <Profile name="realSiloTransferBar" extends="baseReference" with="anchorTopCenter">
+        <textBold value="true"/>
+        <textSize value="15px"/>
+        <textAlignment value="center"/>
+        <textColor value="$preset_fs25_colorMainHighlight"/>
+    </Profile>
+
+</GUIProfiles>

@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8" standalone="no"?>
+<l10n>
+    <texts>
+        <text name="realSilo_configureAction"    text="Silo's bekijken"/>
+        <text name="realSilo_overview"           text="Overzicht"/>
+        <text name="realSilo_settings"           text="Instellingen"/>
+        <text name="realSilo_compartment"        text="Silo"/>
+        <text name="realSilo_empty"              text="Leeg"/>
+        <text name="realSilo_activeSlotInfo"     text="Actieve silo: %d  |  Klik om te kiezen"/>
+        <text name="realSilo_slotActivated"      text="Silo %d is nu actief – storting gaat hierheen."/>
+        <text name="realSilo_siloName"           text="Naam silo:"/>
+        <text name="realSilo_askNumCompartments" text="Aantal silo's (1-32):"/>
+        <text name="realSilo_askCapacity"        text="Capaciteit per silo (liters):"/>
+        <text name="realSilo_save"               text="Opslaan"/>
+        <text name="realSilo_close"              text="Sluiten"/>
+        <text name="realSilo_configSaved" text="Opgeslagen: %d silo's × %s per silo"/>
+        <text name="realSilo_configError"        text="Fout bij opslaan:"/>
+        <text name="realSilo_invalidNumber"      text="Ongeldig getal. Voer 1 t/m 32 in."/>
+        <text name="realSilo_invalidCapacity"    text="Ongeldige capaciteit. Minimum is 1000 liter."/>
+        <text name="realSilo_cantReduce"         text="Silo %d bevat nog %.0f L – kan niet verwijderd worden."/>
+        <text name="realSilo_mustBeEmpty" text="Silo moet leeg zijn om aantal silo's of capaciteit te wijzigen."/>
+        <text name="realSilo_nameSaved" text="Naam opgeslagen."/>
+        <text name="realSilo_notEmptyWarning" text="Silo is niet leeg - alleen naam aanpassen is mogelijk."/>
+        <text name="realSilo_emptyCanChange" text="Silo is leeg – alle instellingen kunnen gewijzigd worden."/>
+        <text name="realSilo_extTag" text="[EXT]"/>
+        <text name="realSilo_firstSetup" text="Eerste instelling"/>
+        <text name="realSilo_activate" text="Activeren"/>
+        <text name="realSilo_enterNumCompartments" text="Voer het aantal silo's in om de silo te activeren."/>
+        <text name="realSilo_mustConfigure" text="Stel eerst het aantal silo's in om de silo te gebruiken."/>
+        <text name="realSilo_notConfiguredYet" text="Silo moet geconfigureerd worden door Admin"/>
+        <text name="realSilo_calcResult" text="%d silo's × %s per silo  (totaal: %s)"/>
+        <text name="realSilo_lockedByMod" text="Deze silo is vergrendeld door de mod-maker."/>
+        <text name="realSilo_editSlotTitle" text="Silo %d: %s"/>
+        <text name="realSilo_editSlotFill" text="Huidige inhoud: %s / %s"/>
+        <text name="realSilo_slotCapacity" text="Capaciteit (liters):"/>
+        <text name="realSilo_slotCapSaved" text="Silo %d capaciteit opgeslagen: %s"/>
+        <text name="realSilo_capBelowFill" text="Capaciteit mag niet kleiner zijn dan de huidige inhoud (%s)."/>
+        <text name="realSilo_transfer" text="Transfer"/>
+        <text name="realSilo_transferStop" text="Stop transfer"/>
+        <text name="realSilo_transferTitle" text="Transfer instellen"/>
+        <text name="realSilo_transferHint" text="Kies de bron- en doelsilo om product over te pompen."/>
+        <text name="realSilo_transferActive" text="Actief: silo %d → silo %d @ %s L/min"/>
+        <text name="realSilo_transferFrom" text="Van silo (nr):"/>
+        <text name="realSilo_transferTo" text="Naar silo (nr):"/>
+        <text name="realSilo_transferRate" text="Snelheid (L/min):"/>
+        <text name="realSilo_transferStart" text="Starten"/>
+        <text name="realSilo_transferStarted" text="Transfer gestart: silo %d → silo %d @ %s L/min"/>
+        <text name="realSilo_transferStopped" text="Transfer gestopt."/>
+        <text name="realSilo_transferRunning" text="Bezig: silo %d → silo %d @ %s L/min"/>
+        <text name="realSilo_transferInvalidSlot" text="Ongeldig bronsilo nummer."/>
+        <text name="realSilo_transferInvalidDest" text="Ongeldige doelsilo (of zelfde als bron)."/>
+        <text name="realSilo_slotNotEmpty" text="Deze silo bevat product. Leeg de silo eerst om de capaciteit te wijzigen."/>
+        <text name="realSilo_configExtensions" text="Extensions"/>
+        <text name="realSilo_extensionConfig" text="Extension configuratie"/>
+        <text name="realSilo_extensionConfigHint" text="Stel het aantal silo's per extension in. Capaciteit per silo: klik op het vak in het overzicht."/>
+        <text name="realSilo_extensionSaved" text="Extension capaciteit opgeslagen."/>
+        <text name="realSilo_extensionAllLocked" text="Alle extension-silo's zijn vastgelegd door de mod."/>
+        <text name="realSilo_next" text="Volgende"/>
+        <text name="realSilo_extMustBeEmpty" text="Leeg de extension eerst om het aantal silo's te wijzigen."/>
+        <text name="realSilo_defaultName" text="Silo"/>
+        <text name="realSilo_defaultExtensionName" text="Silo Extension"/>
+        <text name="realSilo_numCompartmentsLabel" text="aantal silo's"/>
+        <text name="realSilo_noPermission" text="Alleen een admin kan de silo-instellingen wijzigen."/>
+    </texts>
+</l10n>
