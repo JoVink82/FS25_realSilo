@@ -61,7 +61,7 @@ from the silo's total storage capacity divided by the number of compartments.
         ...
     </silo>
 
-    <realSilo compartments="4" name="VTC 220" transferRate="2000">
+    <realSilo compartments="4" name="Your-mod" transferRate="2000">
     </realSilo>
 </placeable>
 ```
@@ -69,7 +69,7 @@ from the silo's total storage capacity divided by the number of compartments.
 ### Example — custom capacity per compartment
 
 ```xml
-<realSilo compartments="4" name="VTC 220">
+<realSilo compartments="4" name="Your-mod">
     <compartment index="1" capacity="100000" />
     <compartment index="2" capacity="75000" />
     <compartment index="3" capacity="25000" />
@@ -80,7 +80,7 @@ from the silo's total storage capacity divided by the number of compartments.
 ### Example — locked configuration (set by mod, not editable by player)
 
 ```xml
-<realSilo compartments="2" name="Fixed Silo" locked="true">
+<realSilo compartments="2" name="Your-mod" locked="true">
     <compartment index="1" capacity="150000" />
     <compartment index="2" capacity="150000" />
 </realSilo>
@@ -148,7 +148,7 @@ so the above results in: compartment 1 = 120.000 L, compartment 2 = 50.000 L.
 
 ## Full examples
 
-### VTC 220 Silo (`Silo_VTC_220.xml`)
+### Your-mod Silo (Your-mod.xml`)
 
 ```xml
 <silo>
@@ -163,7 +163,7 @@ so the above results in: compartment 1 = 120.000 L, compartment 2 = 50.000 L.
     </storages>
 </silo>
 
-<realSilo compartments="4" name="VTC 220">
+<realSilo compartments="4" name="Your-mod">
     <compartment index="1" capacity="100000" />
     <compartment index="2" capacity="60000" />
     <compartment index="3" capacity="40000" />
@@ -171,7 +171,7 @@ so the above results in: compartment 1 = 120.000 L, compartment 2 = 50.000 L.
 </realSilo>
 ```
 
-### VTC 220 Extension (`Silo_VTC_220_Extension.xml`)
+### Your-mod Extension (`Your-mod_Extension.xml`)
 
 ```xml
 <siloExtension>
