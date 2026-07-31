@@ -76,7 +76,13 @@ Storage.getFillLevel = function(self, fillType)
 end
 
 -- ----------------------------------------------------------------
--- getFreeCapacity: alleen het actieve vak (geconfigureerd) of echt.
+-- getFreeCapacity: het actieve vak bepaalt de vrije ruimte.
+-- Cruciaal voor lossen: alleen de storage die het actieve vak
+-- bevat mag vrije capaciteit rapporteren. Zit het actieve vak in
+-- een extension, dan geeft de hoofdsilo-storage 0 (geen ruimte) en
+-- de extension-storage de echte vrije ruimte. Zo lost een trailer
+-- altijd in het actieve vak, of dat nu de hoofdsilo of een
+-- extension is.
 -- ----------------------------------------------------------------
 Storage.getFreeCapacity = function(self, fillType)
     local uid  = realSiloStorageLink[self]
@@ -85,9 +91,17 @@ Storage.getFreeCapacity = function(self, fillType)
         return originalGetFreeCapacity(self, fillType)
     end
     local active = data.slots[data.activeSlot]
-    if not active or active.storage ~= self then return 0 end
-    if active.fillType ~= 0 and fillType ~= nil and active.fillType ~= fillType then return 0 end
-    return math.max(active.capacity - active.fillLevel, 0)
+    if not active then return 0 end
+    if active.storage ~= self then return 0 end
+    if active.fillType ~= 0 and fillType ~= nil and active.fillType ~= fillType then
+        return 0
+    end
+    local free = math.max(active.capacity - active.fillLevel, 0)
+    RealSiloDebug.print(
+        "[realSilo] getFreeCapacity uid=%s actiefVak=%d isExt=%s fillType=%s free=%.0f",
+        tostring(uid), data.activeSlot, tostring(active.isExtension),
+        tostring(fillType), free)
+    return free
 end
 
 -- ----------------------------------------------------------------
@@ -143,17 +157,15 @@ Storage.setFillLevel = function(self, fillLevel, fillType, fillInfo)
             return
         end
 
-        -- Normaal storten in actief vak
+        -- Storten gebeurt UITSLUITEND in het actieve vak. Als de
+        -- aangesproken storage niet de storage van het actieve vak is,
+        -- doen we niets — getFreeCapacity gaf voor die storage ook al 0,
+        -- dus Giants hoort hier niet te storten. Dit voorkomt dat een
+        -- los-actie per ongeluk in een niet-actieve extension belandt.
         local active = data.slots[data.activeSlot]
         if not active or active.storage ~= self then
-            active = nil
-            for _, s in ipairs(data.slots) do
-                if s.storage == self and (s.fillType == fillType or s.fillType == 0) then
-                    active = s; break
-                end
-            end
+            return
         end
-        if not active then return end
         if active.fillType ~= 0 and active.fillType ~= fillType then return end
 
         local room  = math.max(active.capacity - active.fillLevel, 0)

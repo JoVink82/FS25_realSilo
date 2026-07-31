@@ -61,5 +61,6 @@
         <text name="realSilo_defaultExtensionName" text="Silo Extension"/>
         <text name="realSilo_numCompartmentsLabel" text="number of silos"/>
         <text name="realSilo_noPermission" text="Only an admin can change silo settings."/>
+        <text name="input_REALSILO_TRANSFER" text="Transfer"/>
     </texts>
 </l10n>

@@ -61,5 +61,6 @@
         <text name="realSilo_defaultExtensionName" text="Silo-Erweiterung"/>
         <text name="realSilo_numCompartmentsLabel" text="Anzahl Silos"/>
         <text name="realSilo_noPermission"       text="Nur ein Admin kann die Silo-Einstellungen andern."/>
+        <text name="input_REALSILO_TRANSFER" text="Transfer"/>
     </texts>
 </l10n>

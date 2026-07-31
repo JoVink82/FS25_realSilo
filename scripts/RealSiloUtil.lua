@@ -24,16 +24,44 @@
 
 RealSiloUtil = {}
 
+-- ------------------------------------------------------------------
+-- Bepalen of een storage een graansilo is die de mod moet beheren.
+--
+-- De juiste bron van waarheid is de fillType-categorie "FARMSILO".
+-- Dat is precies waarvoor Giants die categorie heeft: het bepaalt
+-- welke producten in een boerderijsilo mogen. Maps die eigen
+-- graansoorten toevoegen (RYE, TRITICALE, SPELT, WINTERWHEAT,
+-- GREENRYE, VETCHRYE, MUSTARD, SILAGEMAIZE, enz.) voegen die aan de
+-- FARMSILO-categorie toe via hun eigen fillTypes.xml. Het spel voegt
+-- die samen met de basis-graansoorten (WHEAT, BARLEY, OAT, CANOLA,
+-- SORGHUM, ...). Door direct de FARMSILO-categorie te lezen, worden
+-- al die soorten automatisch herkend — zonder de mod aan te passen,
+-- en zonder legitieme soorten per ongeluk uit te sluiten.
+--
+-- Een storage wordt beheerd als hij minstens één fillType uit de
+-- FARMSILO-categorie accepteert. Zo blijven mest-, kalk-, aardappel-,
+-- vloeistof- en universele opslagen buiten schot: die accepteren geen
+-- FARMSILO-producten.
+-- ------------------------------------------------------------------
+
 local farmSiloFillTypeSet = nil
 local function getFarmSiloFillTypeSet()
-    if farmSiloFillTypeSet == nil then
-        farmSiloFillTypeSet = {}
-        local list = g_fillTypeManager:getFillTypesByCategoryNames("farmSilo", nil)
-        if list then
-            for _, ft in ipairs(list) do
-                farmSiloFillTypeSet[ft] = true
+    -- Alleen cachen als we daadwerkelijk fillTypes vonden. Zo wordt bij
+    -- een vroege (nog lege) aanroep niet permanent een lege set gecached
+    -- terwijl de map zijn fillTypes.xml later alsnog registreert.
+    if farmSiloFillTypeSet == nil or next(farmSiloFillTypeSet) == nil then
+        local result = {}
+        for _, catName in ipairs({ "farmSilo", "FARMSILO" }) do
+            local ok, list = pcall(function()
+                return g_fillTypeManager:getFillTypesByCategoryNames(catName, nil)
+            end)
+            if ok and list then
+                for _, ft in ipairs(list) do
+                    result[ft] = true
+                end
             end
         end
+        farmSiloFillTypeSet = result
     end
     return farmSiloFillTypeSet
 end
@@ -44,8 +72,22 @@ function RealSiloUtil.isFarmSiloStorage(storage)
     local farmSet = getFarmSiloFillTypeSet()
     for ft, active in pairs(storage.fillTypes) do
         if active and farmSet[ft] then
+            RealSiloDebug.print("[realSilo] Silo herkend: accepteert FARMSILO-product (fillType %s)", tostring(ft))
             return true
         end
+    end
+    -- Niet herkend: log wat de silo WEL accepteert en hoe groot de
+    -- FARMSILO-set is, zodat we kunnen zien waar de mismatch zit.
+    if RealSiloDebug.enabled then
+        local accepted = {}
+        for ft, active in pairs(storage.fillTypes) do
+            if active then table.insert(accepted, tostring(ft)) end
+        end
+        local farmCount = 0
+        for _ in pairs(farmSet) do farmCount = farmCount + 1 end
+        RealSiloDebug.print(
+            "[realSilo] Silo NIET herkend. Accepteert fillTypes: [%s] | FARMSILO-set heeft %d types",
+            table.concat(accepted, ","), farmCount)
     end
     return false
 end
