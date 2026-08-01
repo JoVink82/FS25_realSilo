@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8" standalone="no"?>
 <modDesc descVersion="110">
     <author>Jo_Vink</author>
-    <version>1.0.0.0</version>
+    <version>1.4.0.0</version>
     <title>
         <en>RealSilo – Realistic Silo Compartments</en>
         <nl>RealSilo – Realistische Silo Compartimenten</nl>
@@ -17,6 +17,8 @@ How it works:
 - Use the Transfer function to move grain between compartments at an adjustable speed.
 - Silo extensions are supported and appear as extra compartments in the same menu, these can also be configured.
 - In multiplayer only the admin (logged in via the multiplayer menu) can change the silo settings. Other players can use the silo normally and view the compartment overview.
+
+Compatible with FS25_MoistureSystem: if that mod is active, moisture% and quality grade (A-D) are shown per compartment, and moisture/quality data is correctly preserved per compartment instead of only for the active one.
 ]]></en>
         <nl><![CDATA[RealSilo verdeelt je silo's in aparte compartimenten, elk voor één productsoort. In plaats van alles door elkaar in één grote opslag te gooien, bepaal jij hoeveel vakken een silo krijgt en hoeveel elk vak kan bevatten.
 
@@ -27,6 +29,8 @@ Hoe het werkt:
 - Gebruik de Transfer-functie om graan tussen vakken te verplaatsen met een instelbare snelheid.
 - Silo-extensions worden ondersteund en verschijnen als extra vakken in hetzelfde menu, ook die kun je configureren.
 - In multiplayer kan alleen de admin (ingelogd via het multiplayermenu) de silo-instellingen wijzigen. Andere spelers kunnen de silo normaal gebruiken en het vakkenoverzicht bekijken.
+
+Werkt samen met FS25_MoistureSystem: als die mod actief is, zie je per vak het vochtpercentage en de kwaliteitsgrade (A-D), en blijft vocht/kwaliteitsdata correct per vak bewaard in plaats van alleen voor het actieve vak.
 ]]></nl>
         <de><![CDATA[RealSilo teilt deine Silos in separate Facher auf, jedes fur eine Produktsorte. Statt alles in einen grossen Speicher zu mischen, bestimmst du, wie viele Facher ein Silo bekommt und wie viel jedes Fach fassen kann.
 
@@ -37,6 +41,8 @@ So funktioniert es:
 - Nutze die Transfer-Funktion, um Getreide zwischen Fachern mit einstellbarer Geschwindigkeit zu verschieben.
 - Silo-Erweiterungen werden unterstutzt und erscheinen als zusatzliche Facher im selben Menu, diese konnen ebenfalls konfiguriert werden.
 - Im Multiplayer kann nur der Admin (uber das Multiplayer-Menu eingeloggt) die Silo-Einstellungen andern. Andere Spieler konnen den Silo normal nutzen und die Facherubersicht einsehen.
+
+Kompatibel mit FS25_MoistureSystem: Ist diese Mod aktiv, werden Feuchtigkeit% und Qualitatsstufe (A-D) je Fach angezeigt, und die Feuchtigkeits-/Qualitatsdaten bleiben korrekt pro Fach erhalten statt nur fur das aktive Fach.
 ]]></de>
     </description>
     <multiplayer supported="true"/>
@@ -62,6 +68,7 @@ So funktioniert es:
         <sourceFile filename="scripts/RealSiloDialog.lua"/>
         <sourceFile filename="scripts/realSiloActivatable.lua"/>
         <sourceFile filename="scripts/realSiloHook.lua"/>
+        <sourceFile filename="scripts/realSiloMoistureCompat.lua"/>
     </extraSourceFiles>
 
     <l10n filenamePrefix="translations/translation"/>

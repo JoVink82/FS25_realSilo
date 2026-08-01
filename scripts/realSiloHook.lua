@@ -196,6 +196,8 @@ PlaceableSilo.onLoad = function(self, savegame)
     local specReady = self.spec_silo ~= nil and self.spec_silo.storages ~= nil
     if specReady and not RealSiloUtil.isFarmSiloPlaceableSilo(self) then
         self._realSiloIgnored = true
+        print(string.format("[realSilo][DIAG] onLoad: silo genegeerd (geen farmSilo-fillType) - %s",
+            tostring(self.configFileName)))
         return
     end
 
@@ -207,6 +209,8 @@ PlaceableSilo.onLoad = function(self, savegame)
         math.floor(x+0.5), math.floor(y+0.5), math.floor(z+0.5))
     self.realSiloUniqueId    = uid
     self.realSiloActivatable = RealSiloActivatable.new(self)
+    print(string.format("[realSilo][DIAG] onLoad: silo geregistreerd, uid=%s configFile=%s",
+        tostring(uid), tostring(self.configFileName)))
 
     -- Lees optionele realSilo definitie uit de silo XML
     local xmlDefined = nil
@@ -420,6 +424,8 @@ PlaceableSilo.onPlayerActionTriggerCallback = function(self, triggerId, otherId,
     if self:getOwnerFarmId() ~= g_currentMission:getFarmId() then return end
     if onEnter then
         g_currentMission.activatableObjectsSystem:addActivatable(self.realSiloActivatable)
+        print(string.format("[realSilo][DIAG] playerTrigger onEnter, uid=%s ignored=%s",
+            tostring(self.realSiloUniqueId), tostring(self._realSiloIgnored)))
     else
         g_currentMission.activatableObjectsSystem:removeActivatable(self.realSiloActivatable)
     end
@@ -433,6 +439,8 @@ PlaceableInfoTrigger.onInfoTriggerCallback = function(self, triggerId, otherId, 
     if self:getOwnerFarmId() ~= g_currentMission:getFarmId() then return end
     if onEnter then
         g_currentMission.activatableObjectsSystem:addActivatable(self.realSiloActivatable)
+        print(string.format("[realSilo][DIAG] infoTrigger onEnter, uid=%s ignored=%s",
+            tostring(self.realSiloUniqueId), tostring(self._realSiloIgnored)))
         RealSiloDebug.print("[realSilo] Activatable via infoTrigger")
     else
         g_currentMission.activatableObjectsSystem:removeActivatable(self.realSiloActivatable)
@@ -643,6 +651,15 @@ Mission00.onStartMission = Utils.appendedFunction(Mission00.onStartMission, func
                                 g_i18n:formatNumber(math.floor(fillAmount), 0),
                                 g_i18n:formatNumber(math.floor(cap), 0),
                                 fillTypeName or (g_i18n:getText("realSilo_empty") or "Empty"))
+
+                            -- MoistureSystem-compatibiliteit: vocht% + kwaliteitsgrade
+                            -- achter de regel plakken als die mod actief is en er data is.
+                            if fillAmount > 0 and slot.fillType and slot.fillType ~= 0
+                               and RealSiloMoistureCompat then
+                                local ownerPlaceable = slot.isExtension and slot.extPlaceable or data.placeable
+                                val = val .. RealSiloMoistureCompat.getCompartmentLabel(ownerPlaceable, slot.fillType)
+                            end
+
                             -- Actief vak groen markeren
                             local isActive = (i == activeSlot)
                             _origAddLine(self, label, val, isActive, COLOR_ACTIVE)
