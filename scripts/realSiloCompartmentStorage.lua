@@ -123,6 +123,11 @@ function RealSiloCompartmentStorage.setActiveSlot(uid, slotIndex)
         slot.isActive = (i == slotIndex)
     end
 
+    -- v11: bij het wisselen van actief vak vervalt de "rapporterende"
+    -- storage van het vorige vak. Val terug op active.storage totdat
+    -- er via het nieuwe vak daadwerkelijk gestort/gehaald wordt.
+    data.reportStorage = nil
+
     RealSiloDebug.print(string.format("[realSilo] Actief vak voor %s: vak %d", uid, slotIndex))
 end
 
