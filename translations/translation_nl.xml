@@ -49,6 +49,8 @@
         <text name="realSilo_transferRunning" text="Bezig: silo %d → silo %d @ %s L/min"/>
         <text name="realSilo_transferInvalidSlot" text="Ongeldig bronsilo nummer."/>
         <text name="realSilo_transferInvalidDest" text="Ongeldige doelsilo (of zelfde als bron)."/>
+        <text name="realSilo_transferSourceEmpty" text="Bronvak is leeg."/>
+        <text name="realSilo_transferFillTypeMismatch" text="Doelvak bevat al een ander gewas."/>
         <text name="realSilo_slotNotEmpty" text="Deze silo bevat product. Leeg de silo eerst om de capaciteit te wijzigen."/>
         <text name="realSilo_configExtensions" text="Extensions"/>
         <text name="realSilo_extensionConfig" text="Extension configuratie"/>
@@ -62,5 +64,6 @@
         <text name="realSilo_numCompartmentsLabel" text="aantal silo's"/>
         <text name="realSilo_noPermission" text="Alleen een admin kan de silo-instellingen wijzigen."/>
         <text name="input_REALSILO_TRANSFER" text="Transfer"/>
+        <text name="realSilo_transferBlockedDrying" text="Transfer niet mogelijk: deze silo wordt op dit moment gedroogd."/>
     </texts>
 </l10n>

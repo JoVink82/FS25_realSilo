@@ -740,13 +740,24 @@ end
 
 function RealSiloDialog:onCancel()
     local uid = RealSiloDialog.currentUniqueId
-    local canConfigure = g_currentMission:getIsServer() or g_currentMission.isMasterUser == true
-    if uid and canConfigure and not realSiloManager.isConfigured(uid) then
-        g_currentMission:addIngameNotification(FSBaseMission.INGAME_NOTIFICATION_CRITICAL,
-            g_i18n:getText("realSilo_mustConfigure"))
+    local isConfigured = uid and realSiloManager.isConfigured(uid) or false
+
+    self._goToExtensionsAfterSilo = false
+
+    -- v19 -- BUGFIX: ESC/Cancel deed tot nu toe NIETS bij de eerste
+    -- (nog niet voltooide) configuratie -- de admin/host kreeg alleen
+    -- de melding "eerst configureren" te zien en zat vast in het
+    -- scherm. Nu mag annuleren altijd. Bij een nog niet geconfigureerde
+    -- silo bestaat er geen pagina 1 om naar terug te gaan (die toont
+    -- compartimentdata die nog niet bestaat), dus dan sluiten we het
+    -- menu direct -- de silo blijft gewoon ongeconfigureerd (werkt als
+    -- normale vanilla silo) tot iemand het menu later weer opent en de
+    -- configuratie alsnog afmaakt.
+    if not isConfigured then
+        self:close()
         return
     end
-    self._goToExtensionsAfterSilo = false
+
     if self.currentPage == 2 or self.currentPage == 3 or self.currentPage == 4 or self.currentPage == 5 then
         self:showPage(1)
         self:refreshList()
@@ -855,6 +866,28 @@ function RealSiloDialog:onConfirmTransfer()
     end
     if not rate or rate < 1 then rate = 1000 end
 
+    -- v19 -- BUGFIX: een transfer naar een vak met een ANDER gewas werd
+    -- tot nu toe gewoon "gestart" (bevestiging in de UI), maar
+    -- moveBetweenSlots weigert zo'n verplaatsing stilzwijgend op de
+    -- eerste update-tick -- de speler zag dus "transfer aan" terwijl er
+    -- feitelijk nooit iets bewoog, zonder duidelijke reden. Nu vooraf
+    -- checken en direct een duidelijke foutmelding geven.
+    local slotsForCheck = RealSiloCompartmentStorage.getSlots(uid)
+    local fromSlotInfo  = slotsForCheck and slotsForCheck[math.floor(fromSlot)]
+    local toSlotInfo    = slotsForCheck and slotsForCheck[math.floor(toSlot)]
+    if not fromSlotInfo or not fromSlotInfo.fillType or fromSlotInfo.fillType == 0
+       or not fromSlotInfo.fillLevel or fromSlotInfo.fillLevel <= 0 then
+        g_currentMission:addIngameNotification(FSBaseMission.INGAME_NOTIFICATION_CRITICAL,
+            g_i18n:getText("realSilo_transferSourceEmpty") or "Source compartment is empty.")
+        return
+    end
+    if toSlotInfo and toSlotInfo.fillType and toSlotInfo.fillType ~= 0
+       and toSlotInfo.fillType ~= fromSlotInfo.fillType then
+        g_currentMission:addIngameNotification(FSBaseMission.INGAME_NOTIFICATION_CRITICAL,
+            g_i18n:getText("realSilo_transferFillTypeMismatch") or "Destination compartment already contains a different crop.")
+        return
+    end
+
     local ok, err = RealSiloEvents.sendTransfer(uid, true, math.floor(fromSlot), math.floor(toSlot), math.floor(rate))
     if ok then
         g_currentMission:addIngameNotification(FSBaseMission.INGAME_NOTIFICATION_OK,
@@ -864,6 +897,10 @@ function RealSiloDialog:onConfirmTransfer()
         self:refreshList()
         self.compartmentList:reloadData()
         self:updateTransferStatus()
+    elseif err == "beingDried" then
+        g_currentMission:addIngameNotification(FSBaseMission.INGAME_NOTIFICATION_CRITICAL,
+            g_i18n:getText("realSilo_transferBlockedDrying") or
+            "Cannot transfer while this silo is being dried.")
     else
         g_currentMission:addIngameNotification(FSBaseMission.INGAME_NOTIFICATION_CRITICAL,
             tostring(err))

@@ -49,6 +49,8 @@
         <text name="realSilo_transferRunning"    text="Lauft: Silo %d nach Silo %d @ %s L/min"/>
         <text name="realSilo_transferInvalidSlot" text="Ungultige Quellsilo-Nummer."/>
         <text name="realSilo_transferInvalidDest" text="Ungultiges Zielsilo (oder gleich wie Quelle)."/>
+        <text name="realSilo_transferSourceEmpty" text="Quellfach ist leer."/>
+        <text name="realSilo_transferFillTypeMismatch" text="Zielfach enthaelt bereits eine andere Frucht."/>
         <text name="realSilo_slotNotEmpty"       text="Dieses Silo enthalt Produkt. Erst leeren, um die Kapazitat zu andern."/>
         <text name="realSilo_configExtensions"   text="Erweiterungen"/>
         <text name="realSilo_extensionConfig"    text="Erweiterungskonfiguration"/>
@@ -62,5 +64,6 @@
         <text name="realSilo_numCompartmentsLabel" text="Anzahl Silos"/>
         <text name="realSilo_noPermission"       text="Nur ein Admin kann die Silo-Einstellungen andern."/>
         <text name="input_REALSILO_TRANSFER" text="Transfer"/>
+        <text name="realSilo_transferBlockedDrying" text="Transfer nicht moglich: dieses Silo wird gerade getrocknet."/>
     </texts>
 </l10n>

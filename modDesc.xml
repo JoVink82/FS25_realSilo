@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8" standalone="no"?>
-<modDesc descVersion="110">
+<modDesc descVersion="111">
     <author>Jo_Vink</author>
-    <version>1.0.1.0</version>
+    <version>1.1.0.1</version>
     <title>
         <en>RealSilo – Realistic Silo Compartments</en>
         <nl>RealSilo – Realistische Silo Compartimenten</nl>
@@ -18,9 +18,16 @@ How it works:
 - Silo extensions are supported and appear as extra compartments in the same menu, these can also be configured.
 - In multiplayer only the admin (logged in via the multiplayer menu) can change the silo settings. Other players can use the silo normally and view the compartment overview.
 
-Compatible with FS25_MoistureSystem: if that mod is active, moisture% and quality grade (A-D) are shown per compartment, and moisture/quality data is correctly preserved per compartment instead of only for the active one.
+Please report problems on GitHub: https://github.com/JoVink82/FS25_realSilo
+
+Changelog 1.1.0.1:
+- Fixed ESC/Cancel not working during the first-time silo configuration (you can now cancel out of it)
+- Transfer speed now scales with the in-game time speed, instead of always moving at real-time speed.
+- Configuration menu enlarged so all text fields are fully visible.
+- Compatible with FS25_MoistureSystem v2.0.0.3: each compartment now dries independently.
 ]]></en>
         <nl><![CDATA[RealSilo verdeelt je silo's in aparte compartimenten, elk voor één productsoort. In plaats van alles door elkaar in één grote opslag te gooien, bepaal jij hoeveel vakken een silo krijgt en hoeveel elk vak kan bevatten.
+
 
 Hoe het werkt:
 - Ga naar een bestaande silo of plaats een nieuwe silo, je kunt nu de silo configureren, in multiplayer moet de admin dat doen.
@@ -30,7 +37,13 @@ Hoe het werkt:
 - Silo-extensions worden ondersteund en verschijnen als extra vakken in hetzelfde menu, ook die kun je configureren.
 - In multiplayer kan alleen de admin (ingelogd via het multiplayermenu) de silo-instellingen wijzigen. Andere spelers kunnen de silo normaal gebruiken en het vakkenoverzicht bekijken.
 
-Werkt samen met FS25_MoistureSystem: als die mod actief is, zie je per vak het vochtpercentage en de kwaliteitsgrade (A-D), en blijft vocht/kwaliteitsdata correct per vak bewaard in plaats van alleen voor het actieve vak.
+Problemen graag melden op GitHub: https://github.com/JoVink82/FS25_realSilo
+
+Changelog v1.1.0.1:
+- Probleem opgelost waarbij ESC/Annuleren niet werkte tijdens de eerste configuratie van de silo (je kunt het proces nu annuleren).
+- Transfersnelheid past zich nu aan de spelsnelheid aan, in plaats van altijd op realtime tempo te lopen.
+- Configuratiemenu vergroot zodat alle tekstvelden volledig zichtbaar zijn.
+- Compatibel met FS25_MoistureSystem v2.0.0.3: elk vak droogt nu onafhankelijk van de andere.
 ]]></nl>
         <de><![CDATA[RealSilo teilt deine Silos in separate Facher auf, jedes fur eine Produktsorte. Statt alles in einen grossen Speicher zu mischen, bestimmst du, wie viele Facher ein Silo bekommt und wie viel jedes Fach fassen kann.
 
@@ -42,7 +55,14 @@ So funktioniert es:
 - Silo-Erweiterungen werden unterstutzt und erscheinen als zusatzliche Facher im selben Menu, diese konnen ebenfalls konfiguriert werden.
 - Im Multiplayer kann nur der Admin (uber das Multiplayer-Menu eingeloggt) die Silo-Einstellungen andern. Andere Spieler konnen den Silo normal nutzen und die Facherubersicht einsehen.
 
-Kompatibel mit FS25_MoistureSystem: Ist diese Mod aktiv, werden Feuchtigkeit% und Qualitatsstufe (A-D) je Fach angezeigt, und die Feuchtigkeits-/Qualitatsdaten bleiben korrekt pro Fach erhalten statt nur fur das aktive Fach.
+Bitte melden Sie Probleme unter GitHub: https://github.com/JoVink82/FS25_realSilo
+
+
+Changelog v1.1.0.1:
+- Fehler behoben, bei dem ESC/Abbrechen während der erstmaligen Silo-Konfiguration nicht funktionierte (der Vorgang lässt sich nun abbrechen).
+- Die Transfergeschwindigkeit passt sich jetzt der Spielgeschwindigkeit an, statt immer in Echtzeit zu laufen.
+- Konfigurationsmenu vergrossert, sodass alle Textfelder vollstandig sichtbar sind.
+- Kompatibel mit FS25_MoistureSystem v2.0.0.3: jedes Fach trocknet jetzt unabhangig.
 ]]></de>
     </description>
     <multiplayer supported="true"/>
@@ -69,6 +89,7 @@ Kompatibel mit FS25_MoistureSystem: Ist diese Mod aktiv, werden Feuchtigkeit% un
         <sourceFile filename="scripts/realSiloActivatable.lua"/>
         <sourceFile filename="scripts/realSiloHook.lua"/>
         <sourceFile filename="scripts/realSiloMoistureCompat.lua"/>
+        <sourceFile filename="scripts/realSiloDryerCompat.lua"/>
     </extraSourceFiles>
 
     <l10n filenamePrefix="translations/translation"/>

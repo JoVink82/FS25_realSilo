@@ -56,7 +56,7 @@ end
 
 function RealSiloActivatable:run()
     local uid = self.placeable.realSiloUniqueId
-    print(string.format("[realSilo][DIAG] RealSiloActivatable:run() aangeroepen, uid=%s", tostring(uid)))
+    RealSiloDebug.print("[realSilo][DIAG] RealSiloActivatable:run() aangeroepen, uid=%s", tostring(uid))
     if not uid then return end
     RealSiloDialog.show(uid, self.placeable)
 end

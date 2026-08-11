@@ -120,7 +120,7 @@ local function installHasFillTypePatch()
         return originalHasFillType(self, uniqueId, fillType)
     end
 
-    RealSiloDebug.print("[realSilo] MoistureSystem-compatibiliteit actief (hasFillType kijkt nu naar alle vakken)")
+    print("[realSilo] MoistureSystem-compatibiliteit actief (hasFillType kijkt nu naar alle vakken)")
     return true
 end
 
@@ -129,7 +129,12 @@ end
 -- "  |  A · 12.4%" terug voor een gegeven placeable + fillType, of
 -- "" als MoistureSystem niet actief is of er geen data bekend is.
 -- ----------------------------------------------------------------
-function RealSiloMoistureCompat.getCompartmentLabel(placeable, fillType)
+-- slot (optioneel): als meegegeven en dit vak een EIGEN vocht/
+-- kwaliteit-waarde heeft (gepind bij de eerste MoistureSystem-
+-- uitlezing, zie getEffectiveMoistureInfo), wordt die getoond in plaats van de
+-- gedeelde MoistureSystem-waarde voor silo+fillType. Zonder slot (of
+-- als het vak nog geen eigen waarde heeft) is het gedrag ongewijzigd.
+function RealSiloMoistureCompat.getCompartmentLabel(placeable, fillType, slot, uid, slotIndex)
     if placeable == nil or fillType == nil or fillType == 0 then
         return ""
     end
@@ -139,18 +144,51 @@ function RealSiloMoistureCompat.getCompartmentLabel(placeable, fillType)
         return ""
     end
 
-    local ok, info = pcall(function() return ms:getObjectInfo(placeable.uniqueId, fillType) end)
-    if not ok or info == nil or info.moisture == nil then
+    local info
+    if slot ~= nil and RealSiloCompartmentStorage ~= nil then
+        info = RealSiloCompartmentStorage.getEffectiveMoistureInfo(placeable, slot, uid, slotIndex)
+    else
+        local ok, msInfo = pcall(function() return ms:getObjectInfo(placeable.uniqueId, fillType) end)
+        if ok then info = msInfo end
+    end
+    if info == nil or info.moisture == nil then
+        RealSiloDebug.print(
+            "[realSilo][DIAG] getCompartmentLabel: geen moisture-info | uid=%s fillType=%s info=%s",
+            tostring(placeable.uniqueId), tostring(fillType), tostring(info))
         return ""
+    end
+
+    -- BUGFIX (v8): CropValueMap (net als DryingSystem) is een bare
+    -- global uit MoistureSystem's EIGEN Lua-omgeving, en dus principieel
+    -- onbereikbaar vanuit realSilo's scripts (elke mod draait in FS25 in
+    -- een eigen geïsoleerde omgeving) -- vandaar dat CropValueMap hier
+    -- altijd nil was en de grade nooit verscheen, ongeacht of
+    -- info.quality wel degelijk een geldige waarde had. In plaats van
+    -- te proberen CropValueMap alsnog te bereiken (er is geen gedeelde
+    -- instance van beschikbaar op g_currentMission om via een metatable-
+    -- truc bij te komen, in tegenstelling tot DryingSystem), rekenen we
+    -- de grade hier gewoon zelf uit met dezelfde grenzen als
+    -- CropValueMap.initializeQualityBands() in MoistureSystem's bron
+    -- (data/CropValueMap.lua): A vanaf 90, B vanaf 70, C vanaf 50,
+    -- D daaronder, op de 0-100 quality-schaal die getObjectInfo levert.
+    -- Enige risico: als de MoistureSystem-auteur deze grenzen ooit
+    -- wijzigt, loopt onze eigen indeling er iets uit -- acceptabel,
+    -- gezien het alternatief (nooit een grade kunnen tonen) erger is.
+    local function qualityToGradeLetter(quality)
+        if quality >= 90 then return "A"
+        elseif quality >= 70 then return "B"
+        elseif quality >= 50 then return "C"
+        else return "D" end
     end
 
     local moisturePct = info.moisture * 100
     local gradeLabel = ""
-    if CropValueMap ~= nil and CropValueMap.getQualityGrade ~= nil and info.quality ~= nil then
-        local ok2, grade = pcall(CropValueMap.getQualityGrade, fillType, info.quality)
-        if ok2 and grade ~= nil then
-            gradeLabel = tostring(grade) .. " \xC2\xB7 "
-        end
+    if info.quality ~= nil then
+        gradeLabel = qualityToGradeLetter(info.quality) .. " \xC2\xB7 "
+    else
+        RealSiloDebug.print(
+            "[realSilo][DIAG] getCompartmentLabel: quality ontbreekt | fillType=%s",
+            tostring(fillType))
     end
 
     return string.format("  |  %s%.1f%%", gradeLabel, moisturePct)
@@ -193,7 +231,7 @@ local function installDialogHook()
         end
         if not placeable then return end
 
-        local label = RealSiloMoistureCompat.getCompartmentLabel(placeable, slot.fillType)
+        local label = RealSiloMoistureCompat.getCompartmentLabel(placeable, slot.fillType, slot, uid, index)
         if label == "" then return end
 
         local fillEl = cell:getAttribute("fillLevelText")
@@ -207,12 +245,65 @@ end
 -- Installatie: wachten tot Mission00.onStartMission, net als
 -- realSiloHook.lua zelf doet. Op dat moment zijn ALLE mods (dus ook
 -- MoistureSystem, ongeacht laadvolgorde) al volledig geladen en is
--- g_currentMission.MoistureSystem gegarandeerd aangemaakt als de mod
--- actief is.
+-- g_currentMission.MoistureSystem in theorie al aangemaakt (gebeurt in
+-- MoistureSystem:loadMap(), dat draait al vóór onStartMission) als de
+-- mod actief is.
+--
+-- v6: we hebben in de praktijk GEEN van de succes/faal-logregels van
+-- deze installers teruggezien in een log waarin RealSiloDebug wel
+-- degelijk aan bleek te staan (andere DIAG-regels kwamen wel door) —
+-- dus staat nu niet vast of dit blok ooit met een niet-nil
+-- MoistureSystem draait. Daarom nu: (1) een ALTIJD-zichtbare regel bij
+-- de eerste poging, zodat we voortaan zwart-op-wit zien of dit blok
+-- draait en wat het aantreft, en (2) een korte retry via de update-
+-- loop (max 5 sec) voor het geval MoistureSystem net op dat exact
+-- moment nog niet klaar stond.
 -- ----------------------------------------------------------------
-Mission00.onStartMission = Utils.appendedFunction(Mission00.onStartMission, function()
-    installHasFillTypePatch()
+local _installAttempts = 0
+
+local function tryInstallMoistureCompat()
+    _installAttempts = _installAttempts + 1
+    local ms = g_currentMission and g_currentMission.MoistureSystem
+    if _installAttempts == 1 then
+        RealSiloDebug.print(
+            "[realSilo][DIAG] realSiloMoistureCompat: eerste installatiepoging, MoistureSystem=%s",
+            tostring(ms ~= nil))
+    end
+    local ok1 = installHasFillTypePatch()
     installDialogHook()
+    return ok1
+end
+
+-- Publiek gemaakt (v6) zodat realSiloHook.lua dit ook rechtstreeks kan
+-- aanroepen vanuit PlaceableSilo.onLoad -- een hook waarvan we uit ELK
+-- tot nu toe ontvangen log zeker weten dat hij afgaat, in
+-- tegenstelling tot Mission00.onStartMission waarvan dat (ondanks de
+-- v6-pogingen om dat te bewijzen) nog niet hard bevestigd is. Beide
+-- triggers blijven actief; welke ook het eerst raak schiet, telt.
+RealSiloMoistureCompat.tryInstall = tryInstallMoistureCompat
+
+-- Belangrijk: de retry-wrapper reset FSBaseMission.update NOOIT terug
+-- naar een eerder opgeslagen versie (dat zou een wrapper die een ANDERE
+-- module er tussentijds aan toevoegde weer kunnen wissen). In plaats
+-- daarvan blijft de wrapper permanent hangen maar wordt hij na succes
+-- (of na de max-pogingen-grens) een goedkope no-op via een vlag.
+local _moistureCompatDone = false
+
+Mission00.onStartMission = Utils.appendedFunction(Mission00.onStartMission, function()
+    if tryInstallMoistureCompat() then
+        _moistureCompatDone = true
+        return
+    end
+
+    FSBaseMission.update = Utils.appendedFunction(FSBaseMission.update, function()
+        if _moistureCompatDone then return end
+        if tryInstallMoistureCompat() then
+            _moistureCompatDone = true
+        elseif _installAttempts > 300 then
+            _moistureCompatDone = true
+            RealSiloDebug.print("[realSilo][DIAG] realSiloMoistureCompat: MoistureSystem nooit gevonden na 300 pogingen, gestopt met proberen")
+        end
+    end)
 end)
 
-RealSiloDebug.print("[realSilo] realSiloMoistureCompat geladen")
+print("[realSilo] realSiloMoistureCompat geladen")

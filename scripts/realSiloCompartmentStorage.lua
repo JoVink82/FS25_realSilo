@@ -123,11 +123,6 @@ function RealSiloCompartmentStorage.setActiveSlot(uid, slotIndex)
         slot.isActive = (i == slotIndex)
     end
 
-    -- v11: bij het wisselen van actief vak vervalt de "rapporterende"
-    -- storage van het vorige vak. Val terug op active.storage totdat
-    -- er via het nieuwe vak daadwerkelijk gestort/gehaald wordt.
-    data.reportStorage = nil
-
     RealSiloDebug.print(string.format("[realSilo] Actief vak voor %s: vak %d", uid, slotIndex))
 end
 
@@ -202,6 +197,8 @@ function RealSiloCompartmentStorage.saveToXML(xmlFile, key, uid)
         setXMLFloat(xmlFile, slotKey .. "#fillLevel", slot.fillLevel or 0)
         setXMLInt(xmlFile,   slotKey .. "#isExt",     slot.isExtension and 1 or 0)
         setXMLInt(xmlFile,   slotKey .. "#cap",       math.floor(slot.capacity or 0))
+        if slot.moisture ~= nil then setXMLFloat(xmlFile, slotKey .. "#moisture", slot.moisture) end
+        if slot.quality  ~= nil then setXMLFloat(xmlFile, slotKey .. "#quality",  slot.quality)  end
         savedCount = savedCount + 1
     end
     RealSiloDebug.print(string.format("[realSilo] %d vak(ken) opgeslagen voor %s", savedCount, uid))
@@ -228,6 +225,11 @@ function RealSiloCompartmentStorage.loadFromXML(xmlFile, key, uid)
         slot.fillType  = fillType
         slot.fillLevel = fillLevel
         slot.isActive  = (i == activeSlot)
+        -- Eigen per-vak vocht/kwaliteit (alleen aanwezig als dit vak
+        -- ooit via een droogtransfer is aangeraakt; anders blijft dit
+        -- nil en valt de UI terug op de gedeelde MoistureSystem-waarde)
+        slot.moisture  = getXMLFloat(xmlFile, slotKey .. "#moisture")
+        slot.quality   = getXMLFloat(xmlFile, slotKey .. "#quality")
     end
 
     RealSiloDebug.print(string.format("[realSilo] Vak-verdeling geladen voor %s (actief: vak %d)", uid, activeSlot))
@@ -280,10 +282,74 @@ function RealSiloCompartmentStorage.moveBetweenSlots(uid, fromIndex, toIndex, am
     local fillType = fromSlot.fillType
     local sameStorage = (fromSlot.storage == toSlot.storage)
 
+    -- v18 -- BUGFIX: "vak krijgt de waarde van het andere vak" bij het
+    -- samenvoegen van twee gevulde vakken. Oorzaak: sinds vakken elk
+    -- een EIGEN record in MoistureSystem's droogsysteem kunnen hebben
+    -- (ms.objectInfo["<uid>#vak<N>"], zie realSiloDryerCompat.lua) is
+    -- DAT record leidend zodra het bestaat (getEffectiveMoistureInfo
+    -- checkt het altijd eerst) -- maar de blend hieronder werkte tot
+    -- nu toe rechtstreeks op fromSlot.moisture/toSlot.moisture, zonder
+    -- die eerst te verversen. Resultaat: de blend rekende soms met een
+    -- VERSTE waarde, en zodra de UI daarna opnieuw tekende won het
+    -- (ongewijzigde) per-vak record van MoistureSystem alsnog van de
+    -- zojuist berekende blend -- het leek dan of het doelvak gewoon de
+    -- waarde van het andere vak overnam.
+    --
+    -- Fix: eerst BEIDE vakken verversen via getEffectiveMoistureInfo
+    -- (die het per-vak record checkt als dat bestaat), dan pas blenden,
+    -- en het resultaat meteen terugschrijven naar het doelvak se eigen
+    -- per-vak record zodat een latere weergave niet opnieuw de oude
+    -- (voor-de-merge) waarde laat "winnen".
+    local function ownerPlaceableFor(slot)
+        if slot.isExtension then return slot.extPlaceable end
+        return data.placeable
+    end
+    if RealSiloCompartmentStorage.getEffectiveMoistureInfo then
+        pcall(RealSiloCompartmentStorage.getEffectiveMoistureInfo, ownerPlaceableFor(fromSlot), fromSlot, uid, fromIndex)
+        pcall(RealSiloCompartmentStorage.getEffectiveMoistureInfo, ownerPlaceableFor(toSlot), toSlot, uid, toIndex)
+    end
+
+    -- Vocht/kwaliteit meenemen naar het doelvak — ALLEEN relevant voor
+    -- vakken die al een eigen waarde hebben. Heeft het bronvak geen
+    -- eigen waarde (slot.moisture == nil, het normale geval), dan
+    -- gebeurt hier niets: beide vakken blijven op de gedeelde
+    -- MoistureSystem-waarde vertrouwen, exact het bestaande gedrag.
+    -- Komt product met een eigen vochtwaarde terecht in een vak dat al
+    -- iets bevat, dan wordt de nieuwe waarde een volume-gewogen
+    -- gemiddelde van oud + nieuw (zelfde principe als MoistureSystem's
+    -- eigen transferObjectInfo voor voertuig-transfers) — dit is de
+    -- "grade A mengt met grade A, vochtwaarden mengen" regel.
+    if fromSlot.moisture ~= nil then
+        local toFillBefore     = toSlot.fillLevel
+        local toMoistureBefore = toSlot.moisture or fromSlot.moisture
+        local toQualityBefore  = toSlot.quality  or fromSlot.quality
+        local newTotal = toFillBefore + moved
+        if newTotal > 0.0001 then
+            toSlot.moisture = ((toFillBefore * toMoistureBefore) + (moved * fromSlot.moisture)) / newTotal
+            toSlot.quality  = ((toFillBefore * (toQualityBefore or 0)) + (moved * (fromSlot.quality or 0))) / newTotal
+
+            -- Meteen terugschrijven naar het doelvak se eigen per-vak
+            -- MoistureSystem-record (als dat systeem actief is), zodat
+            -- de zojuist berekende blend niet meteen weer overschreven
+            -- wordt door het oude record zodra iets de UI ververst.
+            local ms = g_currentMission and g_currentMission.MoistureSystem
+            if ms ~= nil and ms.objectInfo ~= nil and RealSiloDryerCompat ~= nil and RealSiloDryerCompat.buildVirtualId ~= nil then
+                local fillTypeName = g_fillTypeManager and g_fillTypeManager:getFillTypeNameByIndex(fillType)
+                if fillTypeName ~= nil then
+                    local virtualId = RealSiloDryerCompat.buildVirtualId(uid, toIndex)
+                    ms.objectInfo[virtualId] = ms.objectInfo[virtualId] or {}
+                    ms.objectInfo[virtualId][fillTypeName] = { moisture = toSlot.moisture, quality = toSlot.quality }
+                end
+            end
+        end
+    end
+
     fromSlot.fillLevel = fromSlot.fillLevel - moved
     if fromSlot.fillLevel <= 0.0001 then
         fromSlot.fillLevel = 0
         fromSlot.fillType  = 0
+        fromSlot.moisture  = nil
+        fromSlot.quality   = nil
     end
     toSlot.fillLevel = toSlot.fillLevel + moved
     if toSlot.fillType == 0 then toSlot.fillType = fillType end
@@ -427,6 +493,121 @@ function RealSiloCompartmentStorage.captureAndDistribute(uid)
     end
 
     RealSiloDebug.print("[realSilo] captureAndDistribute klaar voor %s", tostring(uid))
+end
+
+-- ----------------------------------------------------------------
+-- Seed de per-vak vocht/kwaliteit-boekhouding vanuit MoistureSystem's
+-- gedeelde waarde (silo+fillType), als dit vak nog geen eigen waarde
+-- had. Aangeroepen bij het STARTEN van een droogtransfer: vanaf dat
+-- moment houdt het bronvak zijn EIGEN, onafhankelijke vochtcijfer bij
+-- (nodig omdat MoistureSystem zelf geen vakken kent, alleen silo's).
+-- Geen effect als MoistureSystem niet actief is of er geen data is.
+-- ----------------------------------------------------------------
+function RealSiloCompartmentStorage.seedMoistureFromMoistureSystem(uid, slotIndex, placeable)
+    local data = RealSiloCompartmentStorage.siloSlots[uid]
+    local slot = data and data.slots[slotIndex]
+    if not slot or slot.moisture ~= nil then return false end
+    if not slot.fillType or slot.fillType == 0 then return false end
+    if not placeable or not placeable.uniqueId then return false end
+
+    local ms = g_currentMission and g_currentMission.MoistureSystem
+    if not ms then return false end
+
+    local ok, info = pcall(function() return ms:getObjectInfo(placeable.uniqueId, slot.fillType) end)
+    if not ok or info == nil or info.moisture == nil then return false end
+
+    slot.moisture = info.moisture
+    slot.quality  = info.quality
+    return true
+end
+
+-- ----------------------------------------------------------------
+-- Geef de vocht/kwaliteit-info terug die de UI voor dit vak moet
+-- tonen: de eigen per-vak waarde als die er is (na een
+-- droogtransfer), anders de gedeelde MoistureSystem-waarde voor deze
+-- silo+fillType (huidig gedrag, ongewijzigd voor alle "normale"
+-- vakken die nooit via een droogtransfer zijn aangeraakt).
+-- Retourneert { moisture=, quality= } of nil.
+-- ----------------------------------------------------------------
+function RealSiloCompartmentStorage.getEffectiveMoistureInfo(placeable, slot, uid, slotIndex)
+    if slot == nil or slot.fillType == nil or slot.fillType == 0 then return nil end
+
+    -- v16 -- BUGFIX: nu drogen per vak via MoistureSystem's Grain
+    -- Drying-menu loopt (zie realSiloDryerCompat.lua), heeft een vak
+    -- dat daar gezien is een EIGEN, apart record in ms.objectInfo
+    -- staan (sleutel "<uid>#vak<N>") dat door het drogen bijgewerkt
+    -- wordt. Dat record is dan ALTIJD leidend -- ook als dit vak al
+    -- eerder een gepinde slot.moisture had -- anders blijft de R-menu/
+    -- infobox-weergave hangen op de waarde van vóór het drogen begon.
+    if uid ~= nil and slotIndex ~= nil and RealSiloDryerCompat ~= nil and RealSiloDryerCompat.buildVirtualId ~= nil then
+        local ms = g_currentMission and g_currentMission.MoistureSystem
+        if ms ~= nil and ms.objectInfo ~= nil then
+            local fillTypeName = g_fillTypeManager and g_fillTypeManager:getFillTypeNameByIndex(slot.fillType)
+            if fillTypeName ~= nil then
+                local virtualId = RealSiloDryerCompat.buildVirtualId(uid, slotIndex)
+                local virtualEntry = ms.objectInfo[virtualId]
+                local vInfo = virtualEntry and virtualEntry[fillTypeName]
+                if vInfo ~= nil and vInfo.moisture ~= nil then
+                    slot.moisture = vInfo.moisture
+                    slot.quality  = vInfo.quality
+                    return { moisture = slot.moisture, quality = slot.quality }
+                end
+            end
+        end
+    end
+
+    if slot.moisture ~= nil then
+        return { moisture = slot.moisture, quality = slot.quality }
+    end
+    local ms = g_currentMission and g_currentMission.MoistureSystem
+    if not ms or not placeable or not placeable.uniqueId then return nil end
+    local ok, info = pcall(function() return ms:getObjectInfo(placeable.uniqueId, slot.fillType) end)
+    if ok and info ~= nil and info.moisture ~= nil then
+        -- v11 -- BUGFIX: "silo 1 nam de waarde van silo 2 over". Reden:
+        -- MoistureSystem kent GEEN compartimenten -- het houdt maar één
+        -- gedeelde waarde bij per (silo-uid, gewas). Een vak dat nog
+        -- nooit via een droogtransfer een EIGEN slot.moisture kreeg,
+        -- viel hier altijd terug op die ene gedeelde waarde -- dus
+        -- wanneer ELDERS in dezelfde silo vers graan van hetzelfde
+        -- gewas arriveert (en MoistureSystem zijn gedeelde waarde
+        -- bijwerkt), leek het net of DIT vak van waarde veranderde,
+        -- terwijl er in dit vak niets gebeurd was.
+        --
+        -- Fix: de EERSTE keer dat we voor dit vak succesvol een waarde
+        -- ophalen, "pinnen" we hem direct op het vak zelf (slot.moisture/
+        -- slot.quality). Vanaf dat moment gaat de allereerste regel van
+        -- deze functie (slot.moisture ~= nil) hem gebruiken, en is dit
+        -- vak niet meer gevoelig voor latere wijzigingen elders in de
+        -- silo -- exact hetzelfde principe als bij een droogtransfer,
+        -- nu voor ELK vak dat al gevuld is zodra het voor het eerst
+        -- bekeken wordt (T-menu openen of bij de silo staan volstaat).
+        slot.moisture = info.moisture
+        slot.quality  = info.quality
+        return { moisture = slot.moisture, quality = slot.quality }
+    end
+
+    -- v9 -- DIAG: getObjectInfo gaf niets terug. Om definitief vast te
+    -- stellen of dit een verkeerde sleutel is (data bestaat wel, maar
+    -- onder een andere naam/uid) of een echt lege boekhouding, dumpen we
+    -- hier eenmalig per uid+fillType de RUWE staat: welke fillTypeName
+    -- verwachten we, en welke keys staan er daadwerkelijk in
+    -- ms.objectInfo[uid] (als dat object al bestaat)?
+    if RealSiloDebug and RealSiloDebug.enabled then
+        local expectedName = g_fillTypeManager and g_fillTypeManager.getFillTypeNameByIndex
+            and g_fillTypeManager:getFillTypeNameByIndex(slot.fillType)
+        local rawData = ms.objectInfo and ms.objectInfo[placeable.uniqueId]
+        local keys = {}
+        if rawData ~= nil then
+            for k, _ in pairs(rawData) do table.insert(keys, tostring(k)) end
+        end
+        print(string.format(
+            "[realSilo][DIAG] getEffectiveMoistureInfo RAW: uid=%s slot.fillType=%s verwachteNaam=%s objectInfo[uid]=%s keys=[%s]",
+            tostring(placeable.uniqueId), tostring(slot.fillType), tostring(expectedName),
+            tostring(rawData ~= nil), table.concat(keys, ",")))
+    end
+
+    if ok then return info end
+    return nil
 end
 
 RealSiloDebug.print("[realSilo] RealSiloCompartmentStorage (boekhoud-versie) geladen")

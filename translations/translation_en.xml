@@ -49,6 +49,8 @@
         <text name="realSilo_transferRunning" text="Running: silo %d → silo %d @ %s L/min"/>
         <text name="realSilo_transferInvalidSlot" text="Invalid source silo number."/>
         <text name="realSilo_transferInvalidDest" text="Invalid destination silo (or same as source)."/>
+        <text name="realSilo_transferSourceEmpty" text="Source compartment is empty."/>
+        <text name="realSilo_transferFillTypeMismatch" text="Destination compartment already contains a different crop."/>
         <text name="realSilo_slotNotEmpty" text="This silo contains product. Empty it first to change its capacity."/>
         <text name="realSilo_configExtensions" text="Extensions"/>
         <text name="realSilo_extensionConfig" text="Extension configuration"/>
@@ -62,5 +64,6 @@
         <text name="realSilo_numCompartmentsLabel" text="number of silos"/>
         <text name="realSilo_noPermission" text="Only an admin can change silo settings."/>
         <text name="input_REALSILO_TRANSFER" text="Transfer"/>
+        <text name="realSilo_transferBlockedDrying" text="Cannot transfer: this silo is being dried."/>
     </texts>
 </l10n>

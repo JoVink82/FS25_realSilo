@@ -228,6 +228,24 @@ function realSiloManager.setConfigured(uid)
 end
 
 -- ============================================================
+-- Droger-configuratie: LEGACY, niet meer functioneel gebruikt.
+-- MoistureSystem beheert drogen nu zelf, native, op het actieve vak
+-- van de silo (geen blokkade/override meer vanuit realSilo). Deze
+-- vlag en de onderstaande dryingTransfers-boekhouding blijven staan
+-- als onschadelijke, ongebruikte data zodat oude savegames/XML met
+-- een dryer="true"-attribuut niet stuklopen.
+-- ============================================================
+function realSiloManager.hasDryer(uid)
+    local silo = realSiloManager.silos[uid]
+    return silo ~= nil and silo.config.hasDryer == true
+end
+
+function realSiloManager.setHasDryer(uid, value)
+    local silo = realSiloManager.silos[uid]
+    if silo then silo.config.hasDryer = (value == true) end
+end
+
+-- ============================================================
 -- Transfer systeem
 -- Van één vak naar een ander, met instelbare snelheid (L/min).
 -- Gebruikt RealSiloCompartmentStorage.moveBetweenSlots, dat de
@@ -264,14 +282,91 @@ function realSiloManager.getTransfer(uid)
     return realSiloManager.transfers[uid]
 end
 
+-- ============================================================
+-- Droogtransfers
+-- Een droogtransfer is een gewone transfer (zelfde volume-
+-- verplaatsing via moveBetweenSlots/updateTransfers hierboven),
+-- extra gemarkeerd zodat RealSiloDryingTransfer.onHourChanged()
+-- weet welke bron/doel-vakken elk uur moeten drogen (met dezelfde
+-- snelheid/kosten als MoistureSystem's eigen droogsysteem). Wordt
+-- NIET opgeslagen in de savegame (net als realSiloManager.transfers
+-- hierboven, dat ook al niet persistent is) — een lopende
+-- droogtransfer stopt dus bij het herladen van de save, maar de
+-- reeds bereikte vocht/kwaliteit-waarden per vak blijven wel bewaard
+-- (die staan in RealSiloCompartmentStorage en worden wel opgeslagen).
+-- ============================================================
+
+realSiloManager.dryingTransfers = {}  -- [uid] = { fromSlot, toSlot }
+
+function realSiloManager.startDryingTransfer(uid, fromSlot, toSlot)
+    realSiloManager.dryingTransfers[uid] = { fromSlot = fromSlot, toSlot = toSlot }
+    RealSiloDebug.print(string.format("[realSilo] Droogtransfer gestart: %s vak %d -> vak %d", uid, fromSlot, toSlot))
+end
+
+function realSiloManager.stopDryingTransfer(uid)
+    if realSiloManager.dryingTransfers[uid] then
+        realSiloManager.dryingTransfers[uid] = nil
+        RealSiloDebug.print(string.format("[realSilo] Droogtransfer gestopt: %s", uid))
+    end
+end
+
+function realSiloManager.getDryingTransfer(uid)
+    return realSiloManager.dryingTransfers[uid]
+end
+
+-- v12 -- BUGFIX: transfers/droogtransfers gingen niet sneller bij een
+-- hogere spelsnelheid. Oorzaak: FSBaseMission:update(dt) krijgt de
+-- ONGESCHAALDE, echte tijd -- de spelsnelheid-multiplier wordt in FS25
+-- alleen ZELF toegepast door de Environment-klasse op zijn eigen
+-- dayTime-teller (waar bijvoorbeeld MoistureSystem's uur-gebaseerde
+-- droogfunctie via MessageType.HOUR_CHANGED wél automatisch van
+-- profiteert). Wij rekenden tot nu toe met die ongeschaalde dt, dus
+-- een transfer bewoog altijd evenveel liter per ECHTE minuut, ongeacht
+-- spelsnelheid.
+--
+-- Oplossing: we meten zelf hoeveel IN-GAME tijd (environment.dayTime,
+-- loopt over middernacht heen om) er sinds de vorige update verstreken
+-- is, en gebruiken dát als basis in plaats van de ruwe dt. Bestaat
+-- environment.dayTime onverhoopt niet, dan vallen we terug op de oude
+-- (ongeschaalde) dt -- nooit slechter dan het huidige gedrag.
+local _lastDayTimeForTransfers = nil
+
+local function getGameMsElapsed(dt)
+    local env = g_currentMission and g_currentMission.environment
+    local dayTime = env and env.dayTime
+    if dayTime == nil then
+        return dt -- fallback: oud gedrag
+    end
+    if _lastDayTimeForTransfers == nil then
+        _lastDayTimeForTransfers = dayTime
+        return dt -- eerste keer: nog geen vorige meting, gebruik gewoon dt
+    end
+    local elapsed = dayTime - _lastDayTimeForTransfers
+    _lastDayTimeForTransfers = dayTime
+    if elapsed < 0 then
+        -- middernacht gepasseerd (dayTime rolt over) -- pak de dagduur
+        -- erbij op zodat we geen negatieve/rare delta krijgen
+        local dayLength = (env.dayDuration) or (env.environmentDayDuration) or 86400000
+        elapsed = elapsed + dayLength
+    end
+    -- Bescherming tegen extreme uitschieters (bv. een save-load, of
+    -- een enkele zeer trage frame): clamp op maximaal 10x de ruwe dt,
+    -- zodat een transfer nooit in één klap een onrealistisch grote
+    -- hoeveelheid verplaatst.
+    if elapsed > dt * 10 then elapsed = dt * 10 end
+    if elapsed < 0 then elapsed = 0 end
+    return elapsed
+end
+
 -- Update alle actieve transfers (aangeroepen elke frame, alleen op de server)
 function realSiloManager.updateTransfers(dt)
+    local gameDt = getGameMsElapsed(dt)
     for uid, transfer in pairs(realSiloManager.transfers) do
         if not transfer.active then
             realSiloManager.transfers[uid] = nil
         else
             local literPerMs = transfer.rate / 60000
-            local delta = literPerMs * dt
+            local delta = literPerMs * gameDt
 
             local moved = RealSiloCompartmentStorage.moveBetweenSlots(
                 uid, transfer.fromSlot, transfer.toSlot, delta)

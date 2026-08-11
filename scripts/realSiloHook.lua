@@ -1,8 +1,43 @@
 -- ============================================================
--- realSiloHook.lua  v9 - Schoon extension-herstel via uid
+-- realSiloHook.lua  v13 - Aangepaste naam overal + schoon extension-
+-- herstel via uid
 -- ============================================================
 
 local modDirectory = g_currentModDirectory
+
+-- ================================================================
+-- Aangepaste silo-naam overal tonen (niet alleen in het R-menu)
+--
+-- realSiloManager.siloNames[uid] werd tot nu toe alleen door
+-- RealSiloDialog zelf gelezen (voor de titelbalk van het eigen menu).
+-- Overal elders -- de wereld-infobox, het shop/verkoopmenu, en andere
+-- mods zoals FS25_MoistureSystem die placeable:getName() aanroepen
+-- voor hun eigen UI (bv. het Shift+M droogmenu) -- bleef daardoor de
+-- originele/standaard naam zichtbaar.
+--
+-- Placeable is een echte, gedeelde spelklasse (geen mod-eigen global
+-- zoals DryingSystem), dus getName() kan hier gewoon rechtstreeks
+-- gepatcht worden -- geen metatable-truc nodig, die is alleen nodig
+-- voor klassen die een ANDERE mod zelf aanmaakt. Deze ene patch dekt
+-- automatisch alle drie de plekken die Dennis noemde, want ze roepen
+-- uiteindelijk allemaal dezelfde placeable:getName() aan.
+-- ================================================================
+if Placeable ~= nil and Placeable.getName ~= nil then
+    local originalPlaceableGetName = Placeable.getName
+    Placeable.getName = function(self, ...)
+        local uid = self and self.realSiloUniqueId
+        if uid then
+            local customName = realSiloManager.siloNames[uid]
+            if customName ~= nil and customName ~= "" then
+                return customName
+            end
+        end
+        return originalPlaceableGetName(self, ...)
+    end
+    RealSiloDebug.print("[realSilo] Placeable:getName() gepatcht voor aangepaste silo-namen (infobox/shop/andere mods)")
+else
+    print("[realSilo][DIAG] WAARSCHUWING: Placeable of Placeable.getName niet gevonden, naam-patch niet geïnstalleerd")
+end
 
 -- ================================================================
 -- Savegame helpers
@@ -29,6 +64,7 @@ local function saveAllSiloData()
         setXMLInt(xmlFile,    key .. "#capPerComp",   silo.config.capacityPerCompartment)
         setXMLInt(xmlFile,    key .. "#configured",   silo.config.isConfigured and 1 or 0)
         setXMLInt(xmlFile,    key .. "#locked",       silo.config.locked and 1 or 0)
+        setXMLInt(xmlFile,    key .. "#dryer",        silo.config.hasDryer and 1 or 0)
         setXMLInt(xmlFile,    key .. "#transferRate", silo.config.transferRate or 1000)
         if silo.config.totalStorageCapacity then
             setXMLInt(xmlFile, key .. "#totalCap", silo.config.totalStorageCapacity)
@@ -80,6 +116,7 @@ local function loadAllSiloData()
             capacityPerCompartment = getXMLInt(xmlFile, key .. "#capPerComp") or 50000,
             isConfigured           = (configured == 1),
             locked                 = (getXMLInt(xmlFile, key .. "#locked") or 0) == 1,
+            hasDryer               = (getXMLInt(xmlFile, key .. "#dryer") or 0) == 1,
             transferRate           = getXMLInt(xmlFile, key .. "#transferRate") or 1000,
             totalStorageCapacity   = totalCap,
             slotCapacities         = next(slotCaps) and slotCaps or nil,
@@ -196,8 +233,8 @@ PlaceableSilo.onLoad = function(self, savegame)
     local specReady = self.spec_silo ~= nil and self.spec_silo.storages ~= nil
     if specReady and not RealSiloUtil.isFarmSiloPlaceableSilo(self) then
         self._realSiloIgnored = true
-        print(string.format("[realSilo][DIAG] onLoad: silo genegeerd (geen farmSilo-fillType) - %s",
-            tostring(self.configFileName)))
+        RealSiloDebug.print("[realSilo][DIAG] onLoad: silo genegeerd (geen farmSilo-fillType) - %s",
+            tostring(self.configFileName))
         return
     end
 
@@ -209,8 +246,23 @@ PlaceableSilo.onLoad = function(self, savegame)
         math.floor(x+0.5), math.floor(y+0.5), math.floor(z+0.5))
     self.realSiloUniqueId    = uid
     self.realSiloActivatable = RealSiloActivatable.new(self)
-    print(string.format("[realSilo][DIAG] onLoad: silo geregistreerd, uid=%s configFile=%s",
-        tostring(uid), tostring(self.configFileName)))
+    RealSiloDebug.print("[realSilo][DIAG] onLoad: silo geregistreerd, uid=%s configFile=%s",
+        tostring(uid), tostring(self.configFileName))
+
+    -- v6: extra, onafhankelijke trigger voor de MoistureSystem-
+    -- compatibiliteitslaag, NAAST de bestaande Mission00.onStartMission-
+    -- poging in realSiloMoistureCompat.lua. We
+    -- konden in de praktijk niet bevestigen dat die onStartMission-route
+    -- ooit met een geladen MoistureSystem draait, terwijl PlaceableSilo:onLoad
+    -- aantoonbaar (elke keer, in elke log tot nu toe) wel afgaat. Beide
+    -- routes zijn idempotent (tryInstall stopt vanzelf zodra het gelukt is),
+    -- dus dit kan nooit iets dubbel installeren.
+    if RealSiloMoistureCompat ~= nil and RealSiloMoistureCompat.tryInstall ~= nil then
+        pcall(RealSiloMoistureCompat.tryInstall)
+    end
+    if RealSiloDryerCompat ~= nil and RealSiloDryerCompat.tryInstall ~= nil then
+        pcall(RealSiloDryerCompat.tryInstall)
+    end
 
     -- Lees optionele realSilo definitie uit de silo XML
     local xmlDefined = nil
@@ -239,9 +291,16 @@ PlaceableSilo.onLoad = function(self, savegame)
                 local lockedAttr = getXMLBool(rawXml, rsKey .. "#locked")
                 local locked = (lockedAttr == nil) and true or lockedAttr
 
+                -- dryer: optioneel attribuut. nil = modder heeft niets
+                -- opgegeven -> speler kan de droger-instelling zelf
+                -- kiezen in de dialoog. true/false = modder legt vast
+                -- of dit silomodel een droger heeft (niet aanpasbaar).
+                local dryerAttr = getXMLBool(rawXml, rsKey .. "#dryer")
+
                 xmlDefined = {
                     numCompartments = numComps,
                     locked          = locked,
+                    hasDryer        = dryerAttr,
                     slotCapacities  = next(slotCaps) and slotCaps or nil,
                     name            = getXMLString(rawXml, rsKey .. "#name"),
                     transferRate    = transferRate,
@@ -266,6 +325,10 @@ PlaceableSilo.onLoad = function(self, savegame)
             RealSiloUtil.resolveDisplayName(self, "realSilo_defaultName", "Silo"))
     end
     if cfg and cfg.isConfigured           then realSiloManager.setConfigured(uid) end
+    if cfg and cfg.hasDryer then
+        local s0 = realSiloManager.getSilo(uid)
+        if s0 then s0.config.hasDryer = true end
+    end
     if cfg and cfg.totalStorageCapacity   then
         local silo = realSiloManager.getSilo(uid)
         if silo then silo.config.totalStorageCapacity = cfg.totalStorageCapacity end
@@ -349,6 +412,24 @@ PlaceableSilo.onFinalizePlacement = function(self)
             if s then s.config.locked = xmlDef.locked end
         end
 
+        -- Droger-status: ALLEEN overnemen uit XML als de modder het
+        -- dryer-attribuut expliciet heeft opgegeven (anders blijft de
+        -- door de speler/savegame gekozen waarde staan). Is het wel
+        -- opgegeven, dan is de droger een vast onderdeel van dit
+        -- silomodel: dryerXmlFixed=true maakt de instelling read-only
+        -- in de dialoog (zie RealSiloDialog.lua).
+        do
+            local s = realSiloManager.getSilo(uid)
+            if s then
+                if xmlDef and xmlDef.hasDryer ~= nil then
+                    s.config.hasDryer      = xmlDef.hasDryer
+                    s.config.dryerXmlFixed = true
+                else
+                    s.config.dryerXmlFixed = false
+                end
+            end
+        end
+
         -- Herstel extensions voor deze silo vanuit pendingSaved (uid-gebaseerd)
         local pending = RealSiloExtensionManager.pendingSaved
         local i = 1
@@ -424,8 +505,8 @@ PlaceableSilo.onPlayerActionTriggerCallback = function(self, triggerId, otherId,
     if self:getOwnerFarmId() ~= g_currentMission:getFarmId() then return end
     if onEnter then
         g_currentMission.activatableObjectsSystem:addActivatable(self.realSiloActivatable)
-        print(string.format("[realSilo][DIAG] playerTrigger onEnter, uid=%s ignored=%s",
-            tostring(self.realSiloUniqueId), tostring(self._realSiloIgnored)))
+        RealSiloDebug.print("[realSilo][DIAG] playerTrigger onEnter, uid=%s ignored=%s",
+            tostring(self.realSiloUniqueId), tostring(self._realSiloIgnored))
     else
         g_currentMission.activatableObjectsSystem:removeActivatable(self.realSiloActivatable)
     end
@@ -439,8 +520,8 @@ PlaceableInfoTrigger.onInfoTriggerCallback = function(self, triggerId, otherId, 
     if self:getOwnerFarmId() ~= g_currentMission:getFarmId() then return end
     if onEnter then
         g_currentMission.activatableObjectsSystem:addActivatable(self.realSiloActivatable)
-        print(string.format("[realSilo][DIAG] infoTrigger onEnter, uid=%s ignored=%s",
-            tostring(self.realSiloUniqueId), tostring(self._realSiloIgnored)))
+        RealSiloDebug.print("[realSilo][DIAG] infoTrigger onEnter, uid=%s ignored=%s",
+            tostring(self.realSiloUniqueId), tostring(self._realSiloIgnored))
         RealSiloDebug.print("[realSilo] Activatable via infoTrigger")
     else
         g_currentMission.activatableObjectsSystem:removeActivatable(self.realSiloActivatable)
@@ -458,16 +539,30 @@ end
 
 -- ================================================================
 -- Update loop: transfer systeem
+--
+-- v19 -- ROBUSTHEID: gebruikte hier tot nu toe een handmatige
+-- capture-en-herschrijf van FSBaseMission.update ("local originalUpdate
+-- = FSBaseMission.update; FSBaseMission.update = function(self, dt)
+-- originalUpdate(self, dt) ... end") in plaats van Utils.appendedFunction,
+-- zoals de rest van deze mod (realSiloMoistureCompat.lua/
+-- realSiloDryerCompat.lua) al wel consequent doet. Functioneel
+-- hetzelfde patroon, maar Utils.appendedFunction is Giants' eigen,
+-- bedoelde manier om dit te doen, en is wat andere mods doorgaans ZELF
+-- ook gebruiken om HUN hook ervoor/erachter te plakken -- dus dit sluit
+-- beter aan bij hoe andere mods verwachten dat FSBaseMission.update
+-- opgebouwd wordt. Lost een eventuele "andere mod overschrijft
+-- FSBaseMission.update hard, zonder door te schakelen" niet vanzelf op
+-- (dat is een bug in díe andere mod, niet iets waar wij ons volledig
+-- tegen kunnen wapenen), maar maakt realSilo zelf wel een brave,
+-- voorspelbare schakel in de keten.
 -- ================================================================
-local originalUpdate = FSBaseMission.update
-FSBaseMission.update = function(self, dt)
-    originalUpdate(self, dt)
+FSBaseMission.update = Utils.appendedFunction(FSBaseMission.update, function(self, dt)
     -- Vulniveaus mogen alleen op de server gewijzigd worden; clients
     -- ontvangen de resultaten via de normale storage-synchronisatie.
     if g_server ~= nil then
         realSiloManager.updateTransfers(dt)
     end
-end
+end)
 
 RealSiloDebug.print("[realSilo] PlaceableSilo hooks geïnstalleerd (v9 - schoon extension-herstel)")
 
@@ -657,7 +752,7 @@ Mission00.onStartMission = Utils.appendedFunction(Mission00.onStartMission, func
                             if fillAmount > 0 and slot.fillType and slot.fillType ~= 0
                                and RealSiloMoistureCompat then
                                 local ownerPlaceable = slot.isExtension and slot.extPlaceable or data.placeable
-                                val = val .. RealSiloMoistureCompat.getCompartmentLabel(ownerPlaceable, slot.fillType)
+                                val = val .. RealSiloMoistureCompat.getCompartmentLabel(ownerPlaceable, slot.fillType, slot, _activeSiloUid, i)
                             end
 
                             -- Actief vak groen markeren

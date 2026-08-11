@@ -2,7 +2,7 @@
 <GUI onOpen="onOpen" onClose="onClose" onCreate="onCreate">
     <GuiElement profile="newLayer"/>
     <Bitmap profile="dialogFullscreenBg" id="dialogBg"/>
-    <GuiElement profile="fs25_dialogBg" id="dialogElement" size="700px 560px">
+    <GuiElement profile="fs25_dialogBg" id="dialogElement" size="860px 560px">
         <ThreePartBitmap profile="fs25_dialogBgMiddle"/>
         <ThreePartBitmap profile="fs25_dialogBgTop"/>
         <ThreePartBitmap profile="fs25_dialogBgBottom"/>
@@ -11,21 +11,21 @@
             <Text profile="dialogTitle" text="realSilo" id="dialogTitleElement" position="0px -30px"/>
 
             <Text profile="realSiloInfoBar" id="activeSlotInfo"
-                  text="" position="0px -57px" size="580px 20px"/>
+                  text="" position="0px -57px" size="740px 20px"/>
 
             <!-- Lijst (pagina 1) -->
             <SmoothList profile="realSiloList" id="compartmentList"
-                        position="50px -80px" size="570px 370px"
+                        position="50px -80px" size="730px 370px"
                         focusInit="onOpen"
                         focusChangeTop="nil" focusChangeBottom="nil"
                         onClick="onListClick"
                         onDoubleClick="onListDoubleClick">
-                <ListItem profile="realSiloListItem" name="compartmentRowTemplate" size="555px 50px">
+                <ListItem profile="realSiloListItem" name="compartmentRowTemplate" size="715px 50px">
                     <Text    profile="realSiloActiveMarker" position="4px 0px"     size="22px 50px"  name="activeMarker"/>
                     <Bitmap  profile="realSiloFillTypeIcon" position="30px -7px"   size="36px 36px"  name="fillTypeIcon"/>
                     <Text    profile="realSiloFillTypeName" position="75px -13px"  size="270px 26px" name="compartmentText"/>
                     <Text    profile="realSiloExtTag"       position="350px -15px" size="50px 22px"  name="extTag"/>
-                    <Text    profile="realSiloFillLevel"    position="365px 0px"   size="175px 50px" name="fillLevelText"/>
+                    <Text    profile="realSiloFillLevel"    position="365px 0px"   size="335px 50px" name="fillLevelText"/>
                 </ListItem>
             </SmoothList>
             <ThreePartBitmap profile="fs25_listSliderBox" position="-30px -17px" size="12px 370px" with="anchorTopRight">
@@ -34,7 +34,7 @@
 
             <!-- Transfer status balk (pagina 1, wanneer transfer actief) -->
             <Text profile="realSiloTransferBar" id="transferStatus"
-                  text="" position="0px -468px" size="580px 22px" visible="false"/>
+                  text="" position="0px -468px" size="740px 22px" visible="false"/>
 
             <!-- Dummy panels -->
             <GuiElement profile="emptyPanel" id="pageOverview"  position="0px 0px" size="1px 1px"/>
@@ -46,10 +46,10 @@
                  Eén uniform celtype (60px) voorkomt SmoothList pool-corruptie
                  die bij gemengde typen een willekeurige rij onzichtbaar maakt. -->
             <SmoothList profile="realSiloConfigList" id="configList"
-                        position="50px -80px" size="570px 410px"
+                        position="50px -80px" size="730px 410px"
                         focusChangeTop="nil" focusChangeBottom="nil"
                         visible="false">
-                <ListItem profile="realSiloConfigRow" name="configRowInput" size="555px 60px">
+                <ListItem profile="realSiloConfigRow" name="configRowInput" size="715px 60px">
                     <Text profile="realSiloConfigRowLabel" position="5px -10px" size="290px 40px" name="rowLabel"/>
                     <GuiElement profile="realSiloConfigInputBg" position="305px -10px" size="230px 40px"/>
                     <TextInput profile="realSiloConfigInput" position="305px -10px" size="230px 40px"

@@ -39,6 +39,7 @@ Add a `<realSilo>` tag directly inside `<placeable>`, **after** the `</silo>` cl
 | `name` | No | string | Display name shown in the dialog |
 | `locked` | No | boolean | Defaults to `true` when `<realSilo>` is present. Set `locked="false"` to let players reconfigure compartments/capacity in-game. |
 | `transferRate` | No | integer | Internal transfer speed in L/min (default: 1000) |
+| `dryer` | No | boolean | Legacy, no longer functional. Kept only so old XML/savegames with this attribute don't break. |
 
 ### Child elements — `<compartment>`
 
@@ -185,6 +186,31 @@ so the above results in: compartment 1 = 120.000 L, compartment 2 = 50.000 L.
 ```
 
 ---
+
+## Drying (FS25_MoistureSystem compatibility)
+
+If [FS25_MoistureSystem](https://github.com/Ozz-Modding/FS25_MoistureSystem) is
+active, drying itself is handled entirely by FS25_MoistureSystem, the same as
+on any other silo -- realSilo does not block or replace it.
+
+MoistureSystem itself is not compartment-aware -- it only ever sees one
+placeable per silo. To avoid every compartment drying together at the same
+shared rate/value, realSilo registers each filled compartment as its own
+entry in MoistureSystem's Grain Drying menu (Shift+M), named
+`<silo name> - Silo <N>`, each with an independent moisture/quality record.
+Compartments can be started/stopped drying independently from that menu.
+
+Known limitation: on a multiplayer client (not the host), starting/stopping
+drying from that menu for a realSilo compartment doesn't work, because
+MoistureSystem's client-side toggle relies on a network object id that these
+virtual per-compartment entries don't have. Viewing the list, moisture%,
+quality and ETA works fine for clients; only the host/server can toggle
+drying on realSilo compartments.
+
+realSilo also shows moisture% and quality grade (A-D) per compartment in its
+own dialog and in the world infobox, and keeps each compartment's last-known
+moisture/quality value pinned so compartments don't display each other's
+readings.
 
 ## Rules and limits
 
