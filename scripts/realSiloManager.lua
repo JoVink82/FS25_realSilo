@@ -14,6 +14,7 @@ realSiloManager.nextId = 1
 
 realSiloManager.DEFAULT_COMPARTMENTS = 4
 realSiloManager.DEFAULT_CAPACITY     = 50000
+realSiloManager.DEFAULT_EXTENSION_RANGE = 50   -- meter, per silo instelbaar
 
 function realSiloManager.generateUniqueId(placeable)
     local x, y, z = 0, 0, 0
@@ -42,6 +43,11 @@ function realSiloManager.register(placeable, savedId, savedConfig)
         numCompartments        = realSiloManager.DEFAULT_COMPARTMENTS,
         capacityPerCompartment = realSiloManager.DEFAULT_CAPACITY
     }
+    -- Zoekbereik voor silo-extensions in meters (per silo instelbaar).
+    -- Standaard 50 m; oude savegames zonder deze waarde krijgen hem hier.
+    if cfg.extensionRange == nil then
+        cfg.extensionRange = realSiloManager.DEFAULT_EXTENSION_RANGE or 50
+    end
 
     realSiloManager.silos[uniqueId] = {
         uniqueId = uniqueId,

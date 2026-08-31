@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8" standalone="no"?>
 <modDesc descVersion="111">
     <author>Jo_Vink</author>
-    <version>1.1.0.1</version>
+    <version>1.2.0.0</version>
     <title>
         <en>RealSilo – Realistic Silo Compartments</en>
         <nl>RealSilo – Realistische Silo Compartimenten</nl>
@@ -19,6 +19,15 @@ How it works:
 - In multiplayer only the admin (logged in via the multiplayer menu) can change the silo settings. Other players can use the silo normally and view the compartment overview.
 
 Please report problems on GitHub: https://github.com/JoVink82/FS25_realSilo
+
+Changelog 1.2.0.0:
+- New setting per silo: extension search range in metres (default 50, adjustable 1-300). Extensions within this range are linked to the silo. Changing the range immediately rescans, so newly in-range extensions are linked without replacing the silo.
+- The finance/prices overview now shows the silo's total stored amount across all compartments, instead of only the active compartment.
+- Fixed a bug on maps with multiple silos where the first silo's menu opened everywhere and the second silo became unreachable. The open key now always targets the silo you are standing at.
+
+Changelog 1.1.0.2:
+- The key to open the silo menu can now be changed in Options > Controls (default R).
+
 
 Changelog 1.1.0.1:
 - Fixed ESC/Cancel not working during the first-time silo configuration (you can now cancel out of it)
@@ -39,6 +48,14 @@ Hoe het werkt:
 
 Problemen graag melden op GitHub: https://github.com/JoVink82/FS25_realSilo
 
+Changelog v1.2.0.0:
+- Nieuwe instelling per silo: zoekbereik voor extensions in meters (standaard 50, instelbaar 1-300). Extensions binnen dit bereik worden aan de silo gekoppeld. Bij het wijzigen wordt meteen opnieuw gescand, zodat extensions die nu binnen bereik vallen direct gekoppeld worden zonder de silo opnieuw te plaatsen.
+- Het financien-/prijzenoverzicht toont nu de totale opgeslagen hoeveelheid van de silo over alle vakken, in plaats van alleen het actieve vak.
+- Bug opgelost op maps met meerdere silo's waarbij het menu van de eerste silo overal opende en de tweede silo onbereikbaar werd. De open-toets richt zich nu altijd op de silo waar je bij staat.
+
+Changelog v1.1.0.2:
+- De toets om het silomenu te openen is nu aanpasbaar via Opties > Besturing (standaard R).
+
 Changelog v1.1.0.1:
 - Probleem opgelost waarbij ESC/Annuleren niet werkte tijdens de eerste configuratie van de silo (je kunt het proces nu annuleren).
 - Transfersnelheid past zich nu aan de spelsnelheid aan, in plaats van altijd op realtime tempo te lopen.
@@ -58,6 +75,14 @@ So funktioniert es:
 Bitte melden Sie Probleme unter GitHub: https://github.com/JoVink82/FS25_realSilo
 
 
+Changelog v1.2.0.0:
+- Neue Einstellung pro Silo: Suchbereich fur Erweiterungen in Metern (Standard 50, einstellbar 1-300). Erweiterungen innerhalb dieses Bereichs werden mit dem Silo verbunden. Beim Andern wird sofort neu gescannt, sodass Erweiterungen im neuen Bereich direkt verbunden werden, ohne das Silo neu zu platzieren.
+- Die Finanz-/Preisubersicht zeigt jetzt die gesamte gelagerte Menge des Silos uber alle Facher, statt nur das aktive Fach.
+- Fehler auf Karten mit mehreren Silos behoben, bei dem das Menu des ersten Silos uberall offnete und das zweite Silo unerreichbar wurde. Die Offnen-Taste zielt jetzt immer auf das Silo, an dem du stehst.
+
+Changelog v1.1.0.2:
+- Die Taste zum Offnen des Silomenus kann jetzt unter Optionen > Steuerung geandert werden (Standard R).
+
 Changelog v1.1.0.1:
 - Fehler behoben, bei dem ESC/Abbrechen während der erstmaligen Silo-Konfiguration nicht funktionierte (der Vorgang lässt sich nun abbrechen).
 - Die Transfergeschwindigkeit passt sich jetzt der Spielgeschwindigkeit an, statt immer in Echtzeit zu laufen.
@@ -69,9 +94,13 @@ Changelog v1.1.0.1:
     <iconFilename>icon_RealSilo.dds</iconFilename>
 
     <actions>
+        <action name="REALSILO_OPEN" axisType="HALF_POSITIVE_AXIS" triggerAlways="false" isSink="true"/>
         <action name="REALSILO_TRANSFER" axisType="HALF_POSITIVE_AXIS" triggerAlways="false" isSink="true"/>
     </actions>
     <inputBinding>
+        <actionBinding action="REALSILO_OPEN">
+            <binding device="KB_MOUSE_DEFAULT" input="KEY_r"/>
+        </actionBinding>
         <actionBinding action="REALSILO_TRANSFER">
             <binding device="KB_MOUSE_DEFAULT" input="KEY_t"/>
         </actionBinding>

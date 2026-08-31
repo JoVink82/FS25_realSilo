@@ -6,6 +6,100 @@
 local modDirectory = g_currentModDirectory
 
 -- ================================================================
+-- Open-toets REALSILO_OPEN (standaard R, aanpasbaar via Opties >
+-- Besturing).
+--
+-- ONTWERP: precies EEN globale action-event, niet een per silo.
+-- Een eerdere versie registreerde per silo een eigen event; op maps
+-- met meerdere silo's hield FS25 dan het eerste event vast, waardoor
+-- R overal het menu van de eerste silo opende en de tweede silo
+-- onbereikbaar werd (gemelde bug: hoofdsilo-hal + tweede FARMA 400).
+--
+-- De TRIGGER bepaalt bij welke silo de speler staat; het ene globale
+-- event opent bij indrukken die silo. Staan er door overlappende
+-- triggers meerdere silo's tegelijk als "betreden" geregistreerd, dan
+-- wint de laatst-betreden silo; bij verlaten valt hij terug op een
+-- eventueel nog-betreden andere silo.
+--
+-- Er is bewust GEEN generieke activatable-fallback: die zat op de
+-- gedeelde "object activeren"-toets en botste met andere mods.
+-- ================================================================
+local realSiloActiveTriggerSilo = nil   -- silo waar de speler nu bij staat
+local realSiloEnteredSet        = {}    -- [placeable]=true: alle betreden silo's
+local realSiloGlobalEventId     = nil
+
+local function realSiloUpdatePromptText()
+    if realSiloGlobalEventId == nil or g_inputBinding == nil then return end
+    local active = (realSiloActiveTriggerSilo ~= nil)
+    pcall(function() g_inputBinding:setActionEventTextVisibility(realSiloGlobalEventId, active) end)
+    if active then
+        pcall(function()
+            g_inputBinding:setActionEventText(realSiloGlobalEventId,
+                g_i18n:getText("realSilo_configureAction") or "RealSilo")
+        end)
+    end
+end
+
+local function realSiloEnsureGlobalEvent()
+    if realSiloGlobalEventId ~= nil then return end
+    if g_inputBinding == nil or InputAction.REALSILO_OPEN == nil then return end
+
+    local _, eventId = g_inputBinding:registerActionEvent(
+        InputAction.REALSILO_OPEN, nil,
+        function()
+            local target = realSiloActiveTriggerSilo
+            if target ~= nil and target.realSiloUniqueId ~= nil then
+                RealSiloDialog.show(target.realSiloUniqueId, target)
+            end
+        end,
+        false, true, false, true)
+    realSiloGlobalEventId = eventId
+    if eventId then
+        -- Event blijft ACTIEF; alleen de prompt-tekst wordt getoond/verborgen.
+        -- Een eerdere versie zette het event hier op inactief, waardoor de
+        -- toets in sommige gevallen permanent uit bleef staan (niet in F1,
+        -- geen reactie). Buiten een silo doet de toets simpelweg niets,
+        -- omdat er dan geen doel-silo is.
+        pcall(function() g_inputBinding:setActionEventTextVisibility(eventId, false) end)
+    end
+end
+
+-- Speler betreedt de trigger van een eigen silo.
+local function realSiloRegisterInProximity(self)
+    realSiloEnteredSet[self] = true
+    realSiloActiveTriggerSilo = self
+    realSiloEnsureGlobalEvent()
+    realSiloUpdatePromptText()
+end
+
+-- Speler verlaat de trigger.
+local function realSiloOnLeave(self)
+    realSiloEnteredSet[self] = nil
+    if realSiloActiveTriggerSilo == self then
+        realSiloActiveTriggerSilo = next(realSiloEnteredSet) or nil
+    end
+    realSiloUpdatePromptText()
+end
+
+-- Opruimen als een silo verdwijnt (delete / niet-farmsilo).
+local function realSiloUnregisterFromProximity(self)
+    realSiloEnteredSet[self] = nil
+    if realSiloActiveTriggerSilo == self then
+        realSiloActiveTriggerSilo = next(realSiloEnteredSet) or nil
+    end
+    realSiloUpdatePromptText()
+end
+
+-- Trigger-gebaseerd; geen periodieke afstandscheck meer nodig.
+-- Behouden zodat de aanroep in de update-loop niet crasht.
+local realSiloProximityTimer = 0
+local function realSiloUpdateProximity()
+end
+
+
+
+
+-- ================================================================
 -- Aangepaste silo-naam overal tonen (niet alleen in het R-menu)
 --
 -- realSiloManager.siloNames[uid] werd tot nu toe alleen door
@@ -66,6 +160,7 @@ local function saveAllSiloData()
         setXMLInt(xmlFile,    key .. "#locked",       silo.config.locked and 1 or 0)
         setXMLInt(xmlFile,    key .. "#dryer",        silo.config.hasDryer and 1 or 0)
         setXMLInt(xmlFile,    key .. "#transferRate", silo.config.transferRate or 1000)
+        setXMLInt(xmlFile,    key .. "#extensionRange", silo.config.extensionRange or 50)
         if silo.config.totalStorageCapacity then
             setXMLInt(xmlFile, key .. "#totalCap", silo.config.totalStorageCapacity)
         end
@@ -118,6 +213,7 @@ local function loadAllSiloData()
             locked                 = (getXMLInt(xmlFile, key .. "#locked") or 0) == 1,
             hasDryer               = (getXMLInt(xmlFile, key .. "#dryer") or 0) == 1,
             transferRate           = getXMLInt(xmlFile, key .. "#transferRate") or 1000,
+            extensionRange         = getXMLInt(xmlFile, key .. "#extensionRange") or 50,
             totalStorageCapacity   = totalCap,
             slotCapacities         = next(slotCaps) and slotCaps or nil,
             naam                   = getXMLString(xmlFile, key .. "#naam"),
@@ -154,17 +250,28 @@ local function findNearestRealSilo(extPlaceable)
     if extPlaceable.rootNode and extPlaceable.rootNode ~= 0 then
         ex, ey, ez = getWorldTranslation(extPlaceable.rootNode)
     end
-    local bestUid  = nil
-    local bestDist = math.huge
+    local bestUid   = nil
+    local bestDist  = math.huge
+    local bestRange = 50
     for uid, silo in pairs(realSiloManager.silos) do
         local p = silo.placeable
         if p and p.rootNode and p.rootNode ~= 0 then
             local sx, sy, sz = getWorldTranslation(p.rootNode)
             local dist = MathUtil.vector3Length(ex-sx, ey-sy, ez-sz)
-            if dist < bestDist then bestDist = dist; bestUid = uid end
+            if dist < bestDist then
+                bestDist  = dist
+                bestUid   = uid
+                -- Zoekbereik is per silo instelbaar (standaard 50 m).
+                bestRange = (silo.config and silo.config.extensionRange) or 50
+            end
         end
     end
-    if bestDist < 50 then return bestUid, bestDist end
+    if bestDist < bestRange then
+        RealSiloDebug.print("[realSilo] Extension gekoppeld: afstand %.1f m (bereik %d m)", bestDist, bestRange)
+        return bestUid, bestDist
+    end
+    RealSiloDebug.print("[realSilo] Extension NIET gekoppeld: dichtstbijzijnde silo %.1f m (bereik %d m)",
+        bestDist, bestRange)
     return nil, nil
 end
 
@@ -195,6 +302,30 @@ local function linkExtensionByXmlDef(ext, uid)
         return RealSiloExtensionManager.link(ext, uid, nil)
     end
 end
+
+-- Herscan: koppel ongekoppelde extensions binnen het (mogelijk zojuist
+-- gewijzigde) zoekbereik van een silo. Wordt aangeroepen nadat de
+-- instelling "zoekbereik extensions" is aangepast, zodat de wijziging
+-- meteen effect heeft zonder de silo opnieuw te plaatsen.
+function RealSiloHookRescanExtensions(uid)
+    if uid == nil then return end
+    local linked = 0
+    for _, ext in ipairs(allExtensions) do
+        if not isExtensionLinked(ext) then
+            local nearUid = findNearestRealSilo(ext)
+            if nearUid == uid then
+                if linkExtensionByXmlDef(ext, uid) then
+                    extensionToSilo[ext] = uid
+                    linked = linked + 1
+                end
+            end
+        end
+    end
+    if linked > 0 then
+        RealSiloDebug.print("[realSilo] Herscan: %d extension(s) alsnog gekoppeld aan %s", linked, tostring(uid))
+    end
+end
+
 
 -- ================================================================
 -- GUI registratie na mission start
@@ -276,6 +407,7 @@ PlaceableSilo.onLoad = function(self, savegame)
                 local slotCaps     = {}
                 local i            = 0
                 local transferRate = getXMLFloat(rawXml, rsKey .. "#transferRate") or 1000
+                local extensionRange = getXMLFloat(rawXml, rsKey .. "#extensionRange") or 50
                 while true do
                     local cKey = string.format("%s.compartment(%d)", rsKey, i)
                     local cap  = getXMLInt(rawXml, cKey .. "#capacity")
@@ -304,6 +436,7 @@ PlaceableSilo.onLoad = function(self, savegame)
                     slotCapacities  = next(slotCaps) and slotCaps or nil,
                     name            = getXMLString(rawXml, rsKey .. "#name"),
                     transferRate    = transferRate,
+                    extensionRange  = extensionRange,
                 }
             end
             delete(rawXml)
@@ -333,6 +466,10 @@ PlaceableSilo.onLoad = function(self, savegame)
         local silo = realSiloManager.getSilo(uid)
         if silo then silo.config.totalStorageCapacity = cfg.totalStorageCapacity end
     end
+    if cfg and cfg.extensionRange then
+        local silo = realSiloManager.getSilo(uid)
+        if silo then silo.config.extensionRange = cfg.extensionRange end
+    end
     if cfg and cfg.transferRate then
         local silo = realSiloManager.getSilo(uid)
         if silo then silo.config.transferRate = cfg.transferRate end
@@ -358,6 +495,7 @@ PlaceableSilo.onFinalizePlacement = function(self)
         if self.realSiloActivatable then
             g_currentMission.activatableObjectsSystem:removeActivatable(self.realSiloActivatable)
         end
+        realSiloUnregisterFromProximity(self)
         realSiloManager.unregister(uid)
         self.realSiloUniqueId = nil
         self._realSiloIgnored = true
@@ -397,7 +535,10 @@ PlaceableSilo.onFinalizePlacement = function(self)
                 realSiloManager.setSiloName(uid, xmlDef.name)
             end
             local s2 = realSiloManager.getSilo(uid)
-            if s2 then s2.config.transferRate = xmlDef.transferRate or 1000 end
+            if s2 then
+                s2.config.transferRate   = xmlDef.transferRate or 1000
+                s2.config.extensionRange = xmlDef.extensionRange or 50
+            end
             if xmlDef.slotCapacities then
                 for slotIdx, slotCap in pairs(xmlDef.slotCapacities) do
                     RealSiloCompartmentStorage.setSlotCapacity(uid, slotIdx, slotCap)
@@ -473,6 +614,12 @@ PlaceableSilo.onFinalizePlacement = function(self)
             end
         end
 
+        -- (Bewust GEEN registratie hier: de open-toets wordt pas
+        --  gekoppeld als de speler daadwerkelijk een silo-trigger
+        --  binnenloopt. Registreren tijdens het laden van de map zou
+        --  het action-event te vroeg aanmaken -- dan werkt de toets
+        --  niet en verschijnt hij ook niet in het F1-overzicht.)
+
         RealSiloDebug.print(string.format("[realSilo] onFinalizePlacement OK: %s", uid))
     end
 end
@@ -488,6 +635,7 @@ PlaceableSilo.onDelete = function(self)
             g_currentMission.activatableObjectsSystem:removeActivatable(
                 self.realSiloActivatable)
         end
+        realSiloUnregisterFromProximity(self)
         RealSiloCompartmentStorage.cleanup(self, uid)
         realSiloManager.unregister(uid)
     end
@@ -496,6 +644,14 @@ end
 
 -- ================================================================
 -- Trigger callbacks
+--
+-- De triggers voegen de silo alleen toe aan / verwijderen hem uit de
+-- proximity-registry. De daadwerkelijke toets-toewijzing gebeurt
+-- afstandsgebaseerd in realSiloUpdateProximity() (zie boven), zodat
+-- overlappende hal-/los-triggers de detectie niet meer kunnen breken.
+-- We laten de silo ook in de registry als een trigger onLeave stuurt
+-- terwijl de speler feitelijk nog bij de silo staat -- de
+-- afstandscheck bepaalt zelf wanneer de toets weg moet.
 -- ================================================================
 local originalPlayerTrigger = PlaceableSilo.onPlayerActionTriggerCallback
 PlaceableSilo.onPlayerActionTriggerCallback = function(self, triggerId, otherId, onEnter, onLeave, onStay)
@@ -504,11 +660,9 @@ PlaceableSilo.onPlayerActionTriggerCallback = function(self, triggerId, otherId,
     if not (g_localPlayer and otherId == g_localPlayer.rootNode) then return end
     if self:getOwnerFarmId() ~= g_currentMission:getFarmId() then return end
     if onEnter then
-        g_currentMission.activatableObjectsSystem:addActivatable(self.realSiloActivatable)
-        RealSiloDebug.print("[realSilo][DIAG] playerTrigger onEnter, uid=%s ignored=%s",
-            tostring(self.realSiloUniqueId), tostring(self._realSiloIgnored))
-    else
-        g_currentMission.activatableObjectsSystem:removeActivatable(self.realSiloActivatable)
+        realSiloRegisterInProximity(self)
+    elseif onLeave then
+        realSiloOnLeave(self)
     end
 end
 
@@ -519,12 +673,9 @@ PlaceableInfoTrigger.onInfoTriggerCallback = function(self, triggerId, otherId, 
     if not (g_localPlayer and otherId == g_localPlayer.rootNode) then return end
     if self:getOwnerFarmId() ~= g_currentMission:getFarmId() then return end
     if onEnter then
-        g_currentMission.activatableObjectsSystem:addActivatable(self.realSiloActivatable)
-        RealSiloDebug.print("[realSilo][DIAG] infoTrigger onEnter, uid=%s ignored=%s",
-            tostring(self.realSiloUniqueId), tostring(self._realSiloIgnored))
-        RealSiloDebug.print("[realSilo] Activatable via infoTrigger")
-    else
-        g_currentMission.activatableObjectsSystem:removeActivatable(self.realSiloActivatable)
+        realSiloRegisterInProximity(self)
+    elseif onLeave then
+        realSiloOnLeave(self)
     end
 end
 
@@ -561,6 +712,15 @@ FSBaseMission.update = Utils.appendedFunction(FSBaseMission.update, function(sel
     -- ontvangen de resultaten via de normale storage-synchronisatie.
     if g_server ~= nil then
         realSiloManager.updateTransfers(dt)
+    end
+
+    -- Afstandsgebaseerde toets-toewijzing (elke ~150 ms, niet elk frame:
+    -- de speler beweegt niet zo snel dat vaker nodig is, en het scheelt
+    -- werk). Bepaalt welke eigen silo binnen bereik de open-toets krijgt.
+    realSiloProximityTimer = realSiloProximityTimer + dt
+    if realSiloProximityTimer >= 150 then
+        realSiloProximityTimer = 0
+        realSiloUpdateProximity()
     end
 end)
 

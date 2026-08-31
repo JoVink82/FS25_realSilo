@@ -65,5 +65,7 @@
         <text name="realSilo_noPermission" text="Alleen een admin kan de silo-instellingen wijzigen."/>
         <text name="input_REALSILO_TRANSFER" text="Transfer"/>
         <text name="realSilo_transferBlockedDrying" text="Transfer niet mogelijk: deze silo wordt op dit moment gedroogd."/>
+        <text name="input_REALSILO_OPEN" text="RealSilo openen"/>
+        <text name="realSilo_extensionRange" text="Zoekbereik extensions (m):"/>
     </texts>
 </l10n>

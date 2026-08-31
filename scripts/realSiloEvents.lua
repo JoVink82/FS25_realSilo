@@ -57,7 +57,7 @@ function RealSiloConfigEvent.emptyNew()
     return Event.new(RealSiloConfigEvent_mt)
 end
 
-function RealSiloConfigEvent.new(uid, numComps, capacity, name, transferRate, isBroadcast, isConfigured)
+function RealSiloConfigEvent.new(uid, numComps, capacity, name, transferRate, isBroadcast, isConfigured, extensionRange)
     local self = RealSiloConfigEvent.emptyNew()
     self.uid              = uid
     self.numComps         = numComps
@@ -66,6 +66,7 @@ function RealSiloConfigEvent.new(uid, numComps, capacity, name, transferRate, is
     self.transferRate     = transferRate or 1000
     self.isBroadcast      = isBroadcast or false
     self.isServerConfigured = isConfigured or false
+    self.extensionRange   = extensionRange or 50
     return self
 end
 
@@ -77,6 +78,7 @@ function RealSiloConfigEvent:readStream(streamId, connection)
     self.transferRate     = streamReadUIntN(streamId, 16)
     self.isBroadcast      = streamReadBool(streamId)
     self.isServerConfigured = streamReadBool(streamId)
+    self.extensionRange     = streamReadUIntN(streamId, 9)
     self:run(connection)
 end
 
@@ -88,12 +90,27 @@ function RealSiloConfigEvent:writeStream(streamId, connection)
     streamWriteUIntN(streamId, self.transferRate, 16)
     streamWriteBool(streamId, self.isBroadcast)
     streamWriteBool(streamId, self.isServerConfigured)
+    streamWriteUIntN(streamId, math.min(math.max(self.extensionRange or 50, 1), 300), 9)
 end
 
-function RealSiloConfigEvent.apply(uid, numComps, capacity, name, transferRate, serverConfirmsConfigured)
+function RealSiloConfigEvent.apply(uid, numComps, capacity, name, transferRate, serverConfirmsConfigured, extensionRange)
     realSiloManager.setSiloName(uid, name)
     local silo = realSiloManager.getSilo(uid)
-    if silo then silo.config.transferRate = transferRate end
+    local rangeChanged = false
+    if silo then
+        silo.config.transferRate = transferRate
+        if extensionRange ~= nil and silo.config.extensionRange ~= extensionRange then
+            silo.config.extensionRange = extensionRange
+            rangeChanged = true
+        end
+    end
+
+    -- Zoekbereik gewijzigd: meteen opnieuw scannen, zodat extensions die
+    -- nu binnen bereik vallen direct gekoppeld worden (zonder de silo
+    -- opnieuw te hoeven plaatsen).
+    if rangeChanged and RealSiloHookRescanExtensions ~= nil then
+        RealSiloHookRescanExtensions(uid)
+    end
 
     RealSiloDebug.print(
         "[realSilo][DIAG] ConfigEvent.apply VOOR: uid=%s gevraagd numComps=%d capacity=%d | silo gevonden=%s huidigeNumComps=%s",
@@ -135,26 +152,26 @@ function RealSiloConfigEvent:run(connection)
     -- Op de SERVER geldt: isServerConfigured = true (we stellen zelf in).
     -- Bij een BROADCAST naar clients: gebruik de vlag die meegestuurd is.
     local confirmedConfigured = self.isServerConfigured or (g_server ~= nil and not self.isBroadcast)
-    RealSiloConfigEvent.apply(self.uid, self.numComps, self.capacity, self.name, self.transferRate, confirmedConfigured)
+    RealSiloConfigEvent.apply(self.uid, self.numComps, self.capacity, self.name, self.transferRate, confirmedConfigured, self.extensionRange)
     if g_server ~= nil and not self.isBroadcast then
         g_server:broadcastEvent(
-            RealSiloConfigEvent.new(self.uid, self.numComps, self.capacity, self.name, self.transferRate, true, true),
+            RealSiloConfigEvent.new(self.uid, self.numComps, self.capacity, self.name, self.transferRate, true, true, self.extensionRange),
             true, nil, nil)
     end
 end
 
 -- Aanroepen vanuit de dialoog
-function RealSiloEvents.sendConfig(uid, numComps, capacity, name, transferRate)
+function RealSiloEvents.sendConfig(uid, numComps, capacity, name, transferRate, extensionRange)
     if not RealSiloUtil.canManageSiloLocal(uid) then
         g_currentMission:addIngameNotification(FSBaseMission.INGAME_NOTIFICATION_CRITICAL,
             g_i18n:getText("realSilo_noPermission") or "Je hebt geen toestemming om deze silo te beheren.")
         return false, "noPermission"
     end
-    local ok, err = RealSiloConfigEvent.apply(uid, numComps, capacity, name, transferRate, true)
+    local ok, err = RealSiloConfigEvent.apply(uid, numComps, capacity, name, transferRate, true, extensionRange)
     if g_server ~= nil then
-        g_server:broadcastEvent(RealSiloConfigEvent.new(uid, numComps, capacity, name, transferRate, true, true), true, nil, nil)
+        g_server:broadcastEvent(RealSiloConfigEvent.new(uid, numComps, capacity, name, transferRate, true, true, extensionRange), true, nil, nil)
     else
-        g_client:getServerConnection():sendEvent(RealSiloConfigEvent.new(uid, numComps, capacity, name, transferRate, false, false))
+        g_client:getServerConnection():sendEvent(RealSiloConfigEvent.new(uid, numComps, capacity, name, transferRate, false, false, extensionRange))
     end
     return ok, err
 end
@@ -233,6 +250,75 @@ end
 
 
 -- ============================================================
+-- Vak-naam wijzigen (per compartiment een eigen naam)
+-- ============================================================
+RealSiloSlotNameEvent = {}
+local RealSiloSlotNameEvent_mt = Class(RealSiloSlotNameEvent, Event)
+InitEventClass(RealSiloSlotNameEvent, "RealSiloSlotNameEvent")
+
+function RealSiloSlotNameEvent.emptyNew()
+    return Event.new(RealSiloSlotNameEvent_mt)
+end
+
+function RealSiloSlotNameEvent.new(uid, slotIndex, name, isBroadcast)
+    local self = RealSiloSlotNameEvent.emptyNew()
+    self.uid         = uid
+    self.slotIndex   = slotIndex
+    self.name        = name or ""
+    self.isBroadcast = isBroadcast or false
+    return self
+end
+
+function RealSiloSlotNameEvent:readStream(streamId, connection)
+    self.uid         = streamReadString(streamId)
+    self.slotIndex   = streamReadUIntN(streamId, 6)
+    self.name        = streamReadString(streamId)
+    self.isBroadcast = streamReadBool(streamId)
+    self:run(connection)
+end
+
+function RealSiloSlotNameEvent:writeStream(streamId, connection)
+    streamWriteString(streamId, self.uid)
+    streamWriteUIntN(streamId, self.slotIndex, 6)
+    streamWriteString(streamId, self.name)
+    streamWriteBool(streamId, self.isBroadcast)
+end
+
+function RealSiloSlotNameEvent.apply(uid, slotIndex, name)
+    local ok = RealSiloCompartmentStorage.setSlotName(uid, slotIndex, name)
+    RealSiloEvents.refreshDialog(uid)
+    return ok
+end
+
+function RealSiloSlotNameEvent:run(connection)
+    if g_server ~= nil and connection ~= nil and not self.isBroadcast then
+        if not RealSiloUtil.canManageSilo(self.uid, connection) then
+            RealSiloDebug.print("[realSilo] Vak-naam wijziging geweigerd: geen toestemming")
+            return
+        end
+    end
+    RealSiloSlotNameEvent.apply(self.uid, self.slotIndex, self.name)
+    if g_server ~= nil and not self.isBroadcast then
+        g_server:broadcastEvent(
+            RealSiloSlotNameEvent.new(self.uid, self.slotIndex, self.name, true),
+            true, nil, nil)
+    end
+end
+
+function RealSiloEvents.sendSlotName(uid, slotIndex, name)
+    if not RealSiloUtil.canManageSiloLocal(uid) then
+        g_currentMission:addIngameNotification(FSBaseMission.INGAME_NOTIFICATION_CRITICAL,
+            g_i18n:getText("realSilo_noPermission") or "Je hebt geen toestemming om deze silo te beheren.")
+        return false
+    end
+    local ok = RealSiloSlotNameEvent.apply(uid, slotIndex, name)
+    if g_server ~= nil then
+        g_server:broadcastEvent(RealSiloSlotNameEvent.new(uid, slotIndex, name, true), true, nil, nil)
+    else
+        g_client:getServerConnection():sendEvent(RealSiloSlotNameEvent.new(uid, slotIndex, name, false))
+    end
+    return ok
+end
 -- 3) Actief vak selecteren
 -- ============================================================
 RealSiloActiveSlotEvent = {}
@@ -610,7 +696,8 @@ function RealSiloSyncRequestEvent:run(connection)
             realSiloManager.getSiloName(uid),
             cfg.transferRate or 1000,
             true,
-            realSiloManager.isConfigured(uid)))
+            realSiloManager.isConfigured(uid),
+            cfg.extensionRange or 50))
     end
 
     -- Stuur de koppeling van elke gekoppelde extension, eveneens

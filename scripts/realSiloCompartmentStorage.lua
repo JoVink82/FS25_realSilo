@@ -197,6 +197,9 @@ function RealSiloCompartmentStorage.saveToXML(xmlFile, key, uid)
         setXMLFloat(xmlFile, slotKey .. "#fillLevel", slot.fillLevel or 0)
         setXMLInt(xmlFile,   slotKey .. "#isExt",     slot.isExtension and 1 or 0)
         setXMLInt(xmlFile,   slotKey .. "#cap",       math.floor(slot.capacity or 0))
+        if slot.name ~= nil and slot.name ~= "" then
+            setXMLString(xmlFile, slotKey .. "#name", slot.name)
+        end
         if slot.moisture ~= nil then setXMLFloat(xmlFile, slotKey .. "#moisture", slot.moisture) end
         if slot.quality  ~= nil then setXMLFloat(xmlFile, slotKey .. "#quality",  slot.quality)  end
         savedCount = savedCount + 1
@@ -222,6 +225,7 @@ function RealSiloCompartmentStorage.loadFromXML(xmlFile, key, uid)
         local fillLevel = getXMLFloat(xmlFile, slotKey .. "#fillLevel") or 0
         local cap       = getXMLInt(xmlFile,   slotKey .. "#cap")
         if cap and cap > 0 then slot.capacity = cap end
+        slot.name      = getXMLString(xmlFile, slotKey .. "#name") or slot.name or ""
         slot.fillType  = fillType
         slot.fillLevel = fillLevel
         slot.isActive  = (i == activeSlot)

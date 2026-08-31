@@ -65,5 +65,7 @@
         <text name="realSilo_noPermission" text="Only an admin can change silo settings."/>
         <text name="input_REALSILO_TRANSFER" text="Transfer"/>
         <text name="realSilo_transferBlockedDrying" text="Cannot transfer: this silo is being dried."/>
+        <text name="input_REALSILO_OPEN" text="Open RealSilo"/>
+        <text name="realSilo_extensionRange" text="Extension search range (m):"/>
     </texts>
 </l10n>

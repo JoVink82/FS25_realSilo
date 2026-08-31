@@ -335,6 +335,16 @@ function RealSiloDialog:buildConfigRows(uid, silo)
         digits  = true,
     })
 
+    -- Zoekbereik voor extensions (meters)
+    local extRange = (silo and silo.config.extensionRange) or 50
+    table.insert(self.configRows, { type=ROW_INPUT,
+        label   = g_i18n:getText("realSilo_extensionRange"),
+        value   = tostring(math.floor(extRange)),
+        maxChar = 3,
+        key     = "extensionRange",
+        digits  = true,
+    })
+
     -- Berekening rij
     table.insert(self.configRows, { type=ROW_CALC,
         numComps = silo and silo.config.numCompartments or 4,
@@ -369,8 +379,18 @@ function RealSiloDialog:buildSlotEditRows(slotIdx, slot, naam)
             g_i18n:getText("realSilo_compartment"), slotIdx, naam, infoTxt)
     })
 
+    -- Naam-invoerveld: altijd bewerkbaar (ook als het vak gevuld is).
+    -- Leeg = standaardnaam (Silo N).
+    table.insert(self.configRows, { type=ROW_INPUT,
+        label   = g_i18n:getText("realSilo_slotNameLabel") or "Naam",
+        value   = slot.name or "",
+        maxChar = 24,
+        key     = "slotName",
+        digits  = false,
+    })
+
     if slot.fillLevel > 0 then
-        -- Vak is niet leeg: toon waarschuwing, geen invoer
+        -- Vak is niet leeg: toon waarschuwing, geen capaciteit-invoer
         table.insert(self.configRows, { type=ROW_INFO,
             text = g_i18n:getText("realSilo_slotNotEmpty")
         })
@@ -782,8 +802,12 @@ function RealSiloDialog:onConfirm()
     local numCompsStr  = self:getConfigValue("numComps")
     local naam         = self:getConfigValue("siloName") or ""
     local transferStr  = self:getConfigValue("transferRate")
+    local extRangeStr  = self:getConfigValue("extensionRange")
     local numComps     = tonumber(numCompsStr)
     local transferRate = math.max(tonumber(transferStr) or 1000, 10)
+    -- Zoekbereik extensions: 1 t/m 300 m (buiten dat bereik heeft het
+    -- geen zin; 0 zou alle extensions loskoppelen).
+    local extRange     = math.floor(math.min(math.max(tonumber(extRangeStr) or 50, 1), 300))
 
     if not numComps or numComps < 1 or numComps > 32 then
         g_currentMission:addIngameNotification(FSBaseMission.INGAME_NOTIFICATION_CRITICAL,
@@ -818,7 +842,7 @@ function RealSiloDialog:onConfirm()
         end
     end
 
-    local ok, err = RealSiloEvents.sendConfig(uid, numComps, cap, naam, transferRate)
+    local ok, err = RealSiloEvents.sendConfig(uid, numComps, cap, naam, transferRate, extRange)
     RealSiloDebug.print("[realSilo][DIAG] sendConfig resultaat: ok=%s err=%s", tostring(ok), tostring(err))
     if ok then
         local silo = realSiloManager.getSilo(uid)
@@ -937,34 +961,40 @@ function RealSiloDialog:onConfirmSlot()
     if not uid or not slotIdx then self:showPage(1); return end
 
     self:saveConfigValues()
-    local capStr = self:getConfigValue("slotCap")
-    local cap    = tonumber(capStr)
-    if not cap or cap < 1000 then
-        g_currentMission:addIngameNotification(FSBaseMission.INGAME_NOTIFICATION_CRITICAL,
-            g_i18n:getText("realSilo_invalidCapacity"))
-        return
-    end
-    cap = math.floor(cap)
+
+    -- Naam altijd opslaan (ook als het vak gevuld is)
+    local newName = self:getConfigValue("slotName") or ""
+    RealSiloEvents.sendSlotName(uid, slotIdx, newName)
 
     local slots = RealSiloCompartmentStorage.getSlots(uid)
     local slot  = slots and slots[slotIdx]
-    if slot and cap < slot.fillLevel then
-        g_currentMission:addIngameNotification(FSBaseMission.INGAME_NOTIFICATION_CRITICAL,
-            string.format(g_i18n:getText("realSilo_capBelowFill"),
-                g_i18n:formatVolume(slot.fillLevel, 0)))
-        return
-    end
 
-    local ok = RealSiloEvents.sendSlotCapacity(uid, slotIdx, cap)
-    if ok then
+    -- Capaciteit alleen aanpassen als het vak leeg is (dan bestaat het veld)
+    local capStr = self:getConfigValue("slotCap")
+    if capStr ~= nil then
+        local cap = tonumber(capStr)
+        if not cap or cap < 1000 then
+            g_currentMission:addIngameNotification(FSBaseMission.INGAME_NOTIFICATION_CRITICAL,
+                g_i18n:getText("realSilo_invalidCapacity"))
+            return
+        end
+        cap = math.floor(cap)
+        if slot and cap < slot.fillLevel then
+            g_currentMission:addIngameNotification(FSBaseMission.INGAME_NOTIFICATION_CRITICAL,
+                string.format(g_i18n:getText("realSilo_capBelowFill"),
+                    g_i18n:formatVolume(slot.fillLevel, 0)))
+            return
+        end
+        RealSiloEvents.sendSlotCapacity(uid, slotIdx, cap)
         local msg = string.format(g_i18n:getText("realSilo_slotCapSaved"),
             slotIdx, g_i18n:formatVolume(cap, 0))
         g_currentMission:addIngameNotification(FSBaseMission.INGAME_NOTIFICATION_OK, msg)
         RealSiloDebug.print("[realSilo] " .. msg)
-        self:showPage(1)
-        self:refreshList()
-        self.compartmentList:reloadData()
     end
+
+    self:showPage(1)
+    self:refreshList()
+    self.compartmentList:reloadData()
 end
 
 -- ================================================================
