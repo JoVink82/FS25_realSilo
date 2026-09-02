@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8" standalone="no"?>
 <modDesc descVersion="111">
     <author>Jo_Vink</author>
-    <version>1.2.0.0</version>
+    <version>1.2.0.1</version>
     <title>
         <en>RealSilo – Realistic Silo Compartments</en>
         <nl>RealSilo – Realistische Silo Compartimenten</nl>
@@ -19,6 +19,9 @@ How it works:
 - In multiplayer only the admin (logged in via the multiplayer menu) can change the silo settings. Other players can use the silo normally and view the compartment overview.
 
 Please report problems on GitHub: https://github.com/JoVink82/FS25_realSilo
+
+Changelog 1.2.0.1:
+- Fixed the open key blocking other actions on the same key (for example the pressure washer on R). The key is now only claimed while you are standing at a silo, and released again as soon as you walk away.
 
 Changelog 1.2.0.0:
 - New setting per silo: extension search range in metres (default 50, adjustable 1-300). Extensions within this range are linked to the silo. Changing the range immediately rescans, so newly in-range extensions are linked without replacing the silo.
@@ -48,6 +51,9 @@ Hoe het werkt:
 
 Problemen graag melden op GitHub: https://github.com/JoVink82/FS25_realSilo
 
+Changelog v1.2.0.1:
+- Opgelost dat de open-toets andere acties op dezelfde toets blokkeerde (bijvoorbeeld de hogedrukspuit op R). De toets wordt nu alleen geclaimd zolang je bij een silo staat, en meteen weer vrijgegeven zodra je wegloopt.
+
 Changelog v1.2.0.0:
 - Nieuwe instelling per silo: zoekbereik voor extensions in meters (standaard 50, instelbaar 1-300). Extensions binnen dit bereik worden aan de silo gekoppeld. Bij het wijzigen wordt meteen opnieuw gescand, zodat extensions die nu binnen bereik vallen direct gekoppeld worden zonder de silo opnieuw te plaatsen.
 - Het financien-/prijzenoverzicht toont nu de totale opgeslagen hoeveelheid van de silo over alle vakken, in plaats van alleen het actieve vak.
@@ -74,6 +80,9 @@ So funktioniert es:
 
 Bitte melden Sie Probleme unter GitHub: https://github.com/JoVink82/FS25_realSilo
 
+
+Changelog v1.2.0.1:
+- Behoben, dass die Offnen-Taste andere Aktionen auf derselben Taste blockierte (zum Beispiel den Hochdruckreiniger auf R). Die Taste wird jetzt nur belegt, solange du an einem Silo stehst, und sofort wieder freigegeben, wenn du weggehst.
 
 Changelog v1.2.0.0:
 - Neue Einstellung pro Silo: Suchbereich fur Erweiterungen in Metern (Standard 50, einstellbar 1-300). Erweiterungen innerhalb dieses Bereichs werden mit dem Silo verbunden. Beim Andern wird sofort neu gescannt, sodass Erweiterungen im neuen Bereich direkt verbunden werden, ohne das Silo neu zu platzieren.

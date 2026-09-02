@@ -189,7 +189,7 @@ local function installOwnedDryablesSplit(instance)
         return final
     end
 
-    print("[realSilo] MoistureSystem Grain Drying-menu: door realSilo beheerde silo's opgesplitst per vak")
+    RealSiloDebug.print("[realSilo] MoistureSystem Grain Drying-menu: door realSilo beheerde silo's opgesplitst per vak")
     return true
 end
 
@@ -233,7 +233,7 @@ local function installDrySiloSafetyNet(instance)
         if placeable ~= nil and placeable.realSiloSlotIndex ~= nil then
             local ok, err = pcall(originalDrySilo, self, placeable, ...)
             if not ok then
-                print(string.format(
+                RealSiloDebug.print(string.format(
                     "[realSilo][DIAG] drySilo-fout opgevangen voor vak %s van silo %s: %s",
                     tostring(placeable.realSiloSlotIndex), tostring(placeable.realSiloUniqueId), tostring(err)))
             end
@@ -306,4 +306,4 @@ Mission00.onStartMission = Utils.appendedFunction(Mission00.onStartMission, func
     end)
 end)
 
-print("[realSilo] realSiloDryerCompat geladen (vakken worden als aparte droogbare silo's aangeboden aan MoistureSystem)")
+RealSiloDebug.print("[realSilo] realSiloDryerCompat geladen (vakken worden als aparte droogbare silo's aangeboden aan MoistureSystem)")

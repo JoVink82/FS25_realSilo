@@ -604,7 +604,7 @@ function RealSiloCompartmentStorage.getEffectiveMoistureInfo(placeable, slot, ui
         if rawData ~= nil then
             for k, _ in pairs(rawData) do table.insert(keys, tostring(k)) end
         end
-        print(string.format(
+        RealSiloDebug.print(string.format(
             "[realSilo][DIAG] getEffectiveMoistureInfo RAW: uid=%s slot.fillType=%s verwachteNaam=%s objectInfo[uid]=%s keys=[%s]",
             tostring(placeable.uniqueId), tostring(slot.fillType), tostring(expectedName),
             tostring(rawData ~= nil), table.concat(keys, ",")))

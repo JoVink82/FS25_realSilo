@@ -54,13 +54,18 @@ local function realSiloEnsureGlobalEvent()
         end,
         false, true, false, true)
     realSiloGlobalEventId = eventId
-    if eventId then
-        -- Event blijft ACTIEF; alleen de prompt-tekst wordt getoond/verborgen.
-        -- Een eerdere versie zette het event hier op inactief, waardoor de
-        -- toets in sommige gevallen permanent uit bleef staan (niet in F1,
-        -- geen reactie). Buiten een silo doet de toets simpelweg niets,
-        -- omdat er dan geen doel-silo is.
-        pcall(function() g_inputBinding:setActionEventTextVisibility(eventId, false) end)
+end
+
+-- Event volledig verwijderen zodra de speler geen enkele silo-trigger
+-- meer in staat. Cruciaal: de actie staat op R met isSink="true", dus
+-- zolang het event bestaat slikt RealSilo die toets. Bleef het event
+-- bestaan, dan werkte R nergens anders meer (bv. de hogedrukspuit).
+-- Door hem weg te halen bij het verlaten van de silo is R buiten de
+-- silo weer gewoon vrij voor het spel en andere mods.
+local function realSiloRemoveGlobalEvent()
+    if realSiloGlobalEventId ~= nil and g_inputBinding ~= nil then
+        pcall(function() g_inputBinding:removeActionEvent(realSiloGlobalEventId) end)
+        realSiloGlobalEventId = nil
     end
 end
 
@@ -78,7 +83,12 @@ local function realSiloOnLeave(self)
     if realSiloActiveTriggerSilo == self then
         realSiloActiveTriggerSilo = next(realSiloEnteredSet) or nil
     end
-    realSiloUpdatePromptText()
+    if realSiloActiveTriggerSilo == nil then
+        -- Geen silo meer in de buurt: R weer vrijgeven.
+        realSiloRemoveGlobalEvent()
+    else
+        realSiloUpdatePromptText()
+    end
 end
 
 -- Opruimen als een silo verdwijnt (delete / niet-farmsilo).
@@ -87,14 +97,13 @@ local function realSiloUnregisterFromProximity(self)
     if realSiloActiveTriggerSilo == self then
         realSiloActiveTriggerSilo = next(realSiloEnteredSet) or nil
     end
-    realSiloUpdatePromptText()
+    if realSiloActiveTriggerSilo == nil then
+        realSiloRemoveGlobalEvent()
+    else
+        realSiloUpdatePromptText()
+    end
 end
 
--- Trigger-gebaseerd; geen periodieke afstandscheck meer nodig.
--- Behouden zodat de aanroep in de update-loop niet crasht.
-local realSiloProximityTimer = 0
-local function realSiloUpdateProximity()
-end
 
 
 
@@ -130,7 +139,7 @@ if Placeable ~= nil and Placeable.getName ~= nil then
     end
     RealSiloDebug.print("[realSilo] Placeable:getName() gepatcht voor aangepaste silo-namen (infobox/shop/andere mods)")
 else
-    print("[realSilo][DIAG] WAARSCHUWING: Placeable of Placeable.getName niet gevonden, naam-patch niet geïnstalleerd")
+    RealSiloDebug.print("[realSilo][DIAG] WAARSCHUWING: Placeable of Placeable.getName niet gevonden, naam-patch niet geïnstalleerd")
 end
 
 -- ================================================================
@@ -645,13 +654,10 @@ end
 -- ================================================================
 -- Trigger callbacks
 --
--- De triggers voegen de silo alleen toe aan / verwijderen hem uit de
--- proximity-registry. De daadwerkelijke toets-toewijzing gebeurt
--- afstandsgebaseerd in realSiloUpdateProximity() (zie boven), zodat
--- overlappende hal-/los-triggers de detectie niet meer kunnen breken.
--- We laten de silo ook in de registry als een trigger onLeave stuurt
--- terwijl de speler feitelijk nog bij de silo staat -- de
--- afstandscheck bepaalt zelf wanneer de toets weg moet.
+-- Bij het binnenlopen van een silo-trigger wordt de open-toets
+-- geregistreerd en die silo als doel gezet; bij het verlaten wordt de
+-- toets weer vrijgegeven (zodat R buiten de silo vrij blijft voor het
+-- spel en andere mods).
 -- ================================================================
 local originalPlayerTrigger = PlaceableSilo.onPlayerActionTriggerCallback
 PlaceableSilo.onPlayerActionTriggerCallback = function(self, triggerId, otherId, onEnter, onLeave, onStay)
@@ -714,14 +720,6 @@ FSBaseMission.update = Utils.appendedFunction(FSBaseMission.update, function(sel
         realSiloManager.updateTransfers(dt)
     end
 
-    -- Afstandsgebaseerde toets-toewijzing (elke ~150 ms, niet elk frame:
-    -- de speler beweegt niet zo snel dat vaker nodig is, en het scheelt
-    -- werk). Bepaalt welke eigen silo binnen bereik de open-toets krijgt.
-    realSiloProximityTimer = realSiloProximityTimer + dt
-    if realSiloProximityTimer >= 150 then
-        realSiloProximityTimer = 0
-        realSiloUpdateProximity()
-    end
 end)
 
 RealSiloDebug.print("[realSilo] PlaceableSilo hooks geïnstalleerd (v9 - schoon extension-herstel)")

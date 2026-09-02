@@ -120,7 +120,7 @@ local function installHasFillTypePatch()
         return originalHasFillType(self, uniqueId, fillType)
     end
 
-    print("[realSilo] MoistureSystem-compatibiliteit actief (hasFillType kijkt nu naar alle vakken)")
+    RealSiloDebug.print("[realSilo] MoistureSystem-compatibiliteit actief (hasFillType kijkt nu naar alle vakken)")
     return true
 end
 
@@ -306,4 +306,4 @@ Mission00.onStartMission = Utils.appendedFunction(Mission00.onStartMission, func
     end)
 end)
 
-print("[realSilo] realSiloMoistureCompat geladen")
+RealSiloDebug.print("[realSilo] realSiloMoistureCompat geladen")
