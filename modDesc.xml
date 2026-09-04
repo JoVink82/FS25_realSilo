@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8" standalone="no"?>
 <modDesc descVersion="111">
     <author>Jo_Vink</author>
-    <version>1.2.0.1</version>
+    <version>1.2.0.3</version>
     <title>
         <en>RealSilo – Realistic Silo Compartments</en>
         <nl>RealSilo – Realistische Silo Compartimenten</nl>
@@ -19,6 +19,10 @@ How it works:
 - In multiplayer only the admin (logged in via the multiplayer menu) can change the silo settings. Other players can use the silo normally and view the compartment overview.
 
 Please report problems on GitHub: https://github.com/JoVink82/FS25_realSilo
+
+Changelog 1.2.0.3:
+- The open key no longer blocks other actions on the same key. The default key is now K instead of R, because R is the game's general "activate object" key (pressure washer, shops, doors). Existing players who already have it on R can change it under Options > Controls.
+- Fixed a script error when saving a compartment change (capacity or name); the change is now stored correctly.
 
 Changelog 1.2.0.1:
 - Fixed the open key blocking other actions on the same key (for example the pressure washer on R). The key is now only claimed while you are standing at a silo, and released again as soon as you walk away.
@@ -51,6 +55,10 @@ Hoe het werkt:
 
 Problemen graag melden op GitHub: https://github.com/JoVink82/FS25_realSilo
 
+Changelog v1.2.0.3:
+- De open-toets blokkeert geen andere acties meer op dezelfde toets. De standaardtoets is nu K in plaats van R, omdat R in het spel de algemene "object activeren"-toets is (hogedrukspuit, winkels, deuren). Wie hem al op R had staan, kan dat aanpassen via Opties > Besturing.
+- Scriptfout opgelost bij het opslaan van een vakwijziging (capaciteit of naam); de wijziging wordt nu correct bewaard.
+
 Changelog v1.2.0.1:
 - Opgelost dat de open-toets andere acties op dezelfde toets blokkeerde (bijvoorbeeld de hogedrukspuit op R). De toets wordt nu alleen geclaimd zolang je bij een silo staat, en meteen weer vrijgegeven zodra je wegloopt.
 
@@ -81,6 +89,10 @@ So funktioniert es:
 Bitte melden Sie Probleme unter GitHub: https://github.com/JoVink82/FS25_realSilo
 
 
+Changelog v1.2.0.3:
+- Die Offnen-Taste blockiert keine anderen Aktionen auf derselben Taste mehr. Die Standardtaste ist jetzt K statt R, da R im Spiel die allgemeine "Objekt aktivieren"-Taste ist (Hochdruckreiniger, Laden, Turen). Wer sie bereits auf R hat, kann das unter Optionen > Steuerung andern.
+- Skriptfehler beim Speichern einer Fachanderung (Kapazitat oder Name) behoben; die Anderung wird jetzt korrekt gespeichert.
+
 Changelog v1.2.0.1:
 - Behoben, dass die Offnen-Taste andere Aktionen auf derselben Taste blockierte (zum Beispiel den Hochdruckreiniger auf R). Die Taste wird jetzt nur belegt, solange du an einem Silo stehst, und sofort wieder freigegeben, wenn du weggehst.
 
@@ -103,12 +115,19 @@ Changelog v1.1.0.1:
     <iconFilename>icon_RealSilo.dds</iconFilename>
 
     <actions>
-        <action name="REALSILO_OPEN" axisType="HALF_POSITIVE_AXIS" triggerAlways="false" isSink="true"/>
-        <action name="REALSILO_TRANSFER" axisType="HALF_POSITIVE_AXIS" triggerAlways="false" isSink="true"/>
+        <!-- isSink="false": de toets wordt NIET opgeslokt. Stond dit op
+             true, dan blokkeerde RealSilo de toets voor het spel zelf
+             (gemeld: hogedrukspuit niet meer op te pakken).
+             Standaard KEY_k in plaats van KEY_r, omdat R in FS25 de
+             algemene "object activeren"-toets is (hogedrukspuit, winkels,
+             deuren). Wie R toch wil, kan dat instellen via
+             Opties > Besturing. -->
+        <action name="REALSILO_OPEN" axisType="HALF_POSITIVE_AXIS" triggerAlways="false" isSink="false"/>
+        <action name="REALSILO_TRANSFER" axisType="HALF_POSITIVE_AXIS" triggerAlways="false" isSink="false"/>
     </actions>
     <inputBinding>
         <actionBinding action="REALSILO_OPEN">
-            <binding device="KB_MOUSE_DEFAULT" input="KEY_r"/>
+            <binding device="KB_MOUSE_DEFAULT" input="KEY_k"/>
         </actionBinding>
         <actionBinding action="REALSILO_TRANSFER">
             <binding device="KB_MOUSE_DEFAULT" input="KEY_t"/>

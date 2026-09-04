@@ -69,6 +69,57 @@ local function realSiloRemoveGlobalEvent()
     end
 end
 
+-- ----------------------------------------------------------------
+-- Vangnet: geef de open-toets ook vrij als de trigger nooit een
+-- "verlaten"-melding stuurt.
+--
+-- Dat gebeurt bijvoorbeeld wanneer de speler vanuit de silo-trigger
+-- direct in een voertuig stapt of wordt verplaatst: de trigger meldt
+-- dan geen vertrek, de silo blijft als "actief" staan en de toets
+-- blijft geclaimd. Omdat onze actie op R staat met isSink, werkt R
+-- daarna nergens anders meer -- gemeld als "kan de hogedrukspuit niet
+-- meer oppakken", pas na langere tijd spelen.
+--
+-- Deze controle draait een paar keer per seconde en geeft de toets vrij
+-- zodra de speler er niet meer (redelijk) dichtbij is.
+-- ----------------------------------------------------------------
+local REALSILO_KEEP_DISTANCE = 15.0   -- meter
+local realSiloSafetyTimer = 0
+
+local function realSiloReleaseKeyIfPlayerGone(dt)
+    if realSiloActiveTriggerSilo == nil then return end
+
+    realSiloSafetyTimer = realSiloSafetyTimer + dt
+    if realSiloSafetyTimer < 400 then return end
+    realSiloSafetyTimer = 0
+
+    local release = false
+    local ok = pcall(function()
+        local p = realSiloActiveTriggerSilo
+        if p == nil or p.rootNode == nil or p.rootNode == 0
+           or p.realSiloUniqueId == nil then
+            release = true
+            return
+        end
+        if g_localPlayer == nil or g_localPlayer.rootNode == nil then
+            release = true
+            return
+        end
+        local px, py, pz = getWorldTranslation(g_localPlayer.rootNode)
+        local sx, sy, sz = getWorldTranslation(p.rootNode)
+        if MathUtil.vector3Length(px - sx, py - sy, pz - sz) > REALSILO_KEEP_DISTANCE then
+            release = true
+        end
+    end)
+    if not ok then release = true end
+
+    if release then
+        realSiloEnteredSet = {}
+        realSiloActiveTriggerSilo = nil
+        realSiloRemoveGlobalEvent()
+    end
+end
+
 -- Speler betreedt de trigger van een eigen silo.
 local function realSiloRegisterInProximity(self)
     realSiloEnteredSet[self] = true
@@ -720,6 +771,10 @@ FSBaseMission.update = Utils.appendedFunction(FSBaseMission.update, function(sel
         realSiloManager.updateTransfers(dt)
     end
 
+    -- Vangnet: open-toets vrijgeven als de speler bij de silo weg is
+    -- zonder dat de trigger dat gemeld heeft (bv. ingestapt in een
+    -- voertuig). Zo blijft R niet onbedoeld geclaimd.
+    realSiloReleaseKeyIfPlayerGone(dt)
 end)
 
 RealSiloDebug.print("[realSilo] PlaceableSilo hooks geïnstalleerd (v9 - schoon extension-herstel)")

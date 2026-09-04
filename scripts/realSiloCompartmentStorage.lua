@@ -259,6 +259,31 @@ function RealSiloCompartmentStorage.setSlotCapacity(uid, slotIndex, newCap)
 end
 
 -- ----------------------------------------------------------------
+-- Eigen naam van een vak instellen (leeg = terug naar standaardnaam).
+-- Deze functie ontbrak in een eerdere release terwijl het menu, de
+-- opslag en het netwerk-event er al wel gebruik van maakten; het
+-- opslaan van een vakwijziging liep daardoor stuk met
+-- "attempt to call a nil value".
+-- ----------------------------------------------------------------
+function RealSiloCompartmentStorage.setSlotName(uid, slotIndex, name)
+    local data = RealSiloCompartmentStorage.siloSlots[uid]
+    if not data then return false end
+    local slot = data.slots[slotIndex]
+    if not slot then return false end
+
+    name = tostring(name or "")
+    -- Overmatig lange namen afkappen zodat ze in de lijst passen.
+    if #name > 32 then
+        name = name:sub(1, 32)
+    end
+
+    slot.name = name
+    RealSiloDebug.print(string.format("[realSilo] Vak %d naam: %s",
+        slotIndex, (name ~= "" and name) or "(standaard)"))
+    return true
+end
+
+-- ----------------------------------------------------------------
 -- Verplaats product van het ene vak naar het andere (transfersysteem).
 -- Dit is een EXPLICIETE, door de speler gekozen verplaatsing en
 -- omzeilt daarom de actief-vak-restrictie uit de Storage-hook door
