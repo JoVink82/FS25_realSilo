@@ -28,7 +28,7 @@ local realSiloActiveTriggerSilo = nil   -- silo waar de speler nu bij staat
 -- Een placeable kan zowel een playerActionTrigger als een infoTrigger
 -- hebben. Bewaar daarom iedere door de engine bewaakte trigger-vorm apart;
 -- één onLeave mag de andere, nog betreden vorm niet ongeldig maken.
-local realSiloEnteredSet        = {}    -- [placeable][triggerId]=laatste onEnter/onStay-tijd
+local realSiloEnteredSet        = {}    -- [placeable][triggerId]=true zolang onLeave niet is ontvangen
 local realSiloRegisteredPlayerRoot = nil
 local realSiloGlobalEventId     = nil
 
@@ -135,30 +135,12 @@ end
 -- server registreert dus geen UI-action-event en hoeft niets te synchroniseren.
 -- ----------------------------------------------------------------
 local realSiloSafetyTimer = 0
-local REALSILO_TRIGGER_HEARTBEAT_TIMEOUT = 1000
-
-local function realSiloTriggerTime()
-    return g_time or (g_currentMission and g_currentMission.time) or 0
-end
-
 local function realSiloReleaseKeyIfPlayerGone(dt)
     if realSiloActiveTriggerSilo == nil then return end
 
     realSiloSafetyTimer = realSiloSafetyTimer + dt
     if realSiloSafetyTimer < 400 then return end
     realSiloSafetyTimer = 0
-
-    local now = realSiloTriggerTime()
-    for placeable, triggers in pairs(realSiloEnteredSet) do
-        for triggerId, lastSeen in pairs(triggers) do
-            if now - lastSeen > REALSILO_TRIGGER_HEARTBEAT_TIMEOUT then
-                triggers[triggerId] = nil
-            end
-        end
-        if next(triggers) == nil then
-            realSiloEnteredSet[placeable] = nil
-        end
-    end
 
     local p = realSiloActiveTriggerSilo
     local playerRoot = g_localPlayer and g_localPlayer.rootNode or nil
@@ -193,7 +175,9 @@ local function realSiloRegisterInProximity(self, triggerId, isEnter)
     end
     local wasEntered = triggers[triggerId] ~= nil
     local wasActive = realSiloActiveTriggerSilo == self
-    triggers[triggerId] = realSiloTriggerTime()
+    -- Niet alle GIANTS-infoTriggers sturen continu onStay. De registratie
+    -- blijft daarom geldig tot de bijbehorende echte onLeave-callback.
+    triggers[triggerId] = true
     realSiloActiveTriggerSilo = self
     realSiloRegisteredPlayerRoot = g_localPlayer and g_localPlayer.rootNode or nil
     if not wasEntered or not wasActive then
