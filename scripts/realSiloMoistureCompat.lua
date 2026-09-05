@@ -77,6 +77,31 @@ local function findSiloUidForObject(object)
     return nil
 end
 
+-- MoistureSystem 2.0.0.6 bewaart gegevens van silo-extensions onder de
+-- uniqueId van de bijbehorende hoofdsilo. Oudere versies gebruikten soms de
+-- extension zelf. Geef daarom steeds het canonieke object terug, met een
+-- veilige terugval voor oudere MoistureSystem-versies.
+local function getMoistureOwner(placeable, uid)
+    local ms = g_currentMission and g_currentMission.MoistureSystem
+    if ms ~= nil and placeable ~= nil and placeable.spec_siloExtension ~= nil
+            and ms.getParentSiloForExtension ~= nil then
+        local ok, parent = pcall(ms.getParentSiloForExtension, ms, placeable)
+        if ok and parent ~= nil and parent.uniqueId ~= nil then
+            return parent
+        end
+    end
+
+    if uid ~= nil and realSiloManager ~= nil then
+        local silo = realSiloManager.getSilo(uid)
+        if silo ~= nil and silo.placeable ~= nil and silo.placeable.uniqueId ~= nil then
+            return silo.placeable
+        end
+    end
+    return placeable
+end
+
+RealSiloMoistureCompat.getMoistureOwner = getMoistureOwner
+
 -- ----------------------------------------------------------------
 -- Installeer de hasFillType-patch op de actieve MoistureSystem-
 -- instantie. Idempotent (mag meerdere keren aangeroepen worden) en
@@ -140,6 +165,7 @@ function RealSiloMoistureCompat.getCompartmentLabel(placeable, fillType, slot, u
     end
 
     local ms = g_currentMission and g_currentMission.MoistureSystem
+    placeable = getMoistureOwner(placeable, uid)
     if ms == nil or placeable.uniqueId == nil then
         return ""
     end
@@ -192,6 +218,66 @@ function RealSiloMoistureCompat.getCompartmentLabel(placeable, fillType, slot, u
     end
 
     return string.format("  |  %s%.1f%%", gradeLabel, moisturePct)
+end
+
+-- MoistureSystem 2.0.0.6 geeft de bron van een storting mee via
+-- fillPositionData.sourceUniqueId. Leg die eigenschappen direct vast op het
+-- actieve RealSilo-vak. Zo blijft de classificatie per vak beschikbaar, ook
+-- wanneer MoistureSystem het doel onder de hoofd­silo in plaats van onder de
+-- extension registreert.
+local function installUnloadMoistureHook()
+    if UnloadTrigger == nil or UnloadTrigger.addFillUnitFillLevel == nil
+            or UnloadTrigger._realSiloMoistureHookInstalled then
+        return
+    end
+    UnloadTrigger._realSiloMoistureHookInstalled = true
+
+    local originalAddFillUnitFillLevel = UnloadTrigger.addFillUnitFillLevel
+    UnloadTrigger.addFillUnitFillLevel = function(self, farmId, fillUnitIndex,
+            fillLevelDelta, fillTypeIndex, toolType, fillPositionData, extraAttributes)
+        local ms = g_currentMission and g_currentMission.MoistureSystem
+        local sourceId = fillPositionData and fillPositionData.sourceUniqueId
+        local sourceInfo = nil
+        if ms ~= nil and sourceId ~= nil then
+            local ok, info = pcall(ms.getObjectInfo, ms, sourceId, fillTypeIndex)
+            if ok then sourceInfo = info end
+        end
+
+        local targetPlaceable = self.target and self.target.owningPlaceable
+        local uid = findSiloUidForObject(targetPlaceable)
+        local data = uid and RealSiloCompartmentStorage.siloSlots[uid]
+        local slot = data and data.slots[data.activeSlot]
+        local oldLevel = slot and slot.fillLevel or 0
+
+        local applied = originalAddFillUnitFillLevel(self, farmId, fillUnitIndex,
+            fillLevelDelta, fillTypeIndex, toolType, fillPositionData, extraAttributes)
+
+        if sourceInfo ~= nil and sourceInfo.moisture ~= nil and slot ~= nil
+                and slot.fillType == fillTypeIndex and slot.fillLevel > oldLevel then
+            local added = slot.fillLevel - oldLevel
+            local newLevel = slot.fillLevel
+            if oldLevel <= 0 or slot.moisture == nil then
+                slot.moisture = sourceInfo.moisture
+                slot.quality = sourceInfo.quality
+            else
+                slot.moisture = ((oldLevel * slot.moisture)
+                    + (added * sourceInfo.moisture)) / newLevel
+                local oldQuality = slot.quality or sourceInfo.quality or 100
+                local sourceQuality = sourceInfo.quality or oldQuality
+                slot.quality = ((oldLevel * oldQuality)
+                    + (added * sourceQuality)) / newLevel
+            end
+
+            local owner = getMoistureOwner(targetPlaceable, uid)
+            if owner ~= nil and owner.uniqueId ~= nil and ms.setObjectInfo ~= nil then
+                pcall(ms.setObjectInfo, ms, owner.uniqueId, fillTypeIndex, {
+                    moisture = slot.moisture,
+                    quality = slot.quality
+                })
+            end
+        end
+        return applied
+    end
 end
 
 -- ----------------------------------------------------------------
@@ -270,6 +356,7 @@ local function tryInstallMoistureCompat()
             tostring(ms ~= nil))
     end
     local ok1 = installHasFillTypePatch()
+    installUnloadMoistureHook()
     installDialogHook()
     return ok1
 end
