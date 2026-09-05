@@ -193,18 +193,14 @@ Storage.setFillLevel = function(self, fillLevel, fillType, fillInfo)
     local virtualCurrent = virtualFillLevel(data, self, fillType)
     local delta = fillLevel - virtualCurrent
 
-    if delta > 0.0001 then
+    -- Geen epsilon gebruiken voor live storage-mutaties. GIANTS laat een
+    -- FillUnit pas exact leeglopen wanneer ook de laatste fractie liter is
+    -- toegepast; als wij die fractie negeren blijft de discharge-state aan
+    -- en blijft een trailer in de kiepstand staan.
+    if delta > 0 then
         RealSiloDebug.print(
             "[realSilo][DIAG] storten uid=%s ft=%s gevraagd=%.0f boekTotaal=%.0f delta=%.0f actiefVak=%d",
             tostring(uid), tostring(fillType), fillLevel, bookTotal, delta, data.activeSlot)
-        -- Bypass: boekhouding klopt al → Giants laadt vanuit onze savegame
-        if math.abs(bookTotal - fillLevel) < 0.5 then
-            self._realSiloApplying = true
-            originalSetFillLevel(self, fillLevel, fillType, fillInfo)
-            self._realSiloApplying = false
-            return
-        end
-
         -- Storten gebeurt UITSLUITEND in het actieve vak. Als de
         -- aangesproken storage niet de storage van het actieve vak is,
         -- doen we niets — getFreeCapacity gaf voor die storage ook al 0,
@@ -228,17 +224,17 @@ Storage.setFillLevel = function(self, fillLevel, fillType, fillInfo)
         originalSetFillLevel(self, realCurrent + added, fillType, fillInfo)
         self._realSiloApplying = false
 
-    elseif delta < -0.0001 then
+    elseif delta < 0 then
         local toRemove    = -delta
         local totalDrained = 0
         local active       = data.slots[data.activeSlot]
 
         local function drain(slot)
-            if toRemove <= 0.0001 then return end
+            if toRemove <= 0 then return end
             if slot.storage == self and slot.fillType == fillType and slot.fillLevel > 0 then
                 local removed = math.min(toRemove, slot.fillLevel)
                 slot.fillLevel = slot.fillLevel - removed
-                if slot.fillLevel <= 0.0001 then slot.fillLevel = 0; slot.fillType = 0 end
+                if slot.fillLevel <= 0.00001 then slot.fillLevel = 0; slot.fillType = 0 end
                 toRemove     = toRemove - removed
                 totalDrained = totalDrained + removed
             end
