@@ -28,7 +28,7 @@ local realSiloActiveTriggerSilo = nil   -- silo waar de speler nu bij staat
 -- Een placeable kan zowel een playerActionTrigger als een infoTrigger
 -- hebben. Bewaar daarom iedere door de engine bewaakte trigger-vorm apart;
 -- één onLeave mag de andere, nog betreden vorm niet ongeldig maken.
-local realSiloEnteredSet        = {}    -- [placeable][triggerId]=true
+local realSiloEnteredSet        = {}    -- [placeable][triggerId]=laatste onEnter/onStay-tijd
 local realSiloRegisteredPlayerRoot = nil
 local realSiloGlobalEventId     = nil
 
@@ -132,6 +132,11 @@ end
 -- server registreert dus geen UI-action-event en hoeft niets te synchroniseren.
 -- ----------------------------------------------------------------
 local realSiloSafetyTimer = 0
+local REALSILO_TRIGGER_HEARTBEAT_TIMEOUT = 1000
+
+local function realSiloTriggerTime()
+    return g_time or (g_currentMission and g_currentMission.time) or 0
+end
 
 local function realSiloReleaseKeyIfPlayerGone(dt)
     if realSiloActiveTriggerSilo == nil then return end
@@ -139,6 +144,18 @@ local function realSiloReleaseKeyIfPlayerGone(dt)
     realSiloSafetyTimer = realSiloSafetyTimer + dt
     if realSiloSafetyTimer < 400 then return end
     realSiloSafetyTimer = 0
+
+    local now = realSiloTriggerTime()
+    for placeable, triggers in pairs(realSiloEnteredSet) do
+        for triggerId, lastSeen in pairs(triggers) do
+            if now - lastSeen > REALSILO_TRIGGER_HEARTBEAT_TIMEOUT then
+                triggers[triggerId] = nil
+            end
+        end
+        if next(triggers) == nil then
+            realSiloEnteredSet[placeable] = nil
+        end
+    end
 
     local p = realSiloActiveTriggerSilo
     local playerRoot = g_localPlayer and g_localPlayer.rootNode or nil
@@ -149,6 +166,7 @@ local function realSiloReleaseKeyIfPlayerGone(dt)
         or playerRoot == nil
         or playerRoot == 0
         or playerRoot ~= realSiloRegisteredPlayerRoot
+        or realSiloEnteredSet[p] == nil
 
     if release then
         realSiloEnteredSet = {}
@@ -159,20 +177,26 @@ local function realSiloReleaseKeyIfPlayerGone(dt)
 end
 
 -- Speler betreedt de trigger van een eigen silo.
-local function realSiloRegisterInProximity(self, triggerId)
+local function realSiloRegisterInProximity(self, triggerId, isEnter)
     if triggerId == nil then return end
-    RealSiloDebug.print("[realSilo][DIAG] trigger BINNEN bij uid=%s triggerId=%s",
-        tostring(self.realSiloUniqueId), tostring(triggerId))
+    if isEnter then
+        RealSiloDebug.print("[realSilo][DIAG] trigger BINNEN bij uid=%s triggerId=%s",
+            tostring(self.realSiloUniqueId), tostring(triggerId))
+    end
     local triggers = realSiloEnteredSet[self]
     if triggers == nil then
         triggers = {}
         realSiloEnteredSet[self] = triggers
     end
-    triggers[triggerId] = true
+    local wasEntered = triggers[triggerId] ~= nil
+    local wasActive = realSiloActiveTriggerSilo == self
+    triggers[triggerId] = realSiloTriggerTime()
     realSiloActiveTriggerSilo = self
     realSiloRegisteredPlayerRoot = g_localPlayer and g_localPlayer.rootNode or nil
-    realSiloEnsureGlobalEvent()
-    realSiloUpdatePromptText()
+    if not wasEntered or not wasActive then
+        realSiloEnsureGlobalEvent()
+        realSiloUpdatePromptText()
+    end
 end
 
 local function realSiloFindEnteredSilo()
@@ -795,8 +819,8 @@ PlaceableSilo.onPlayerActionTriggerCallback = function(self, triggerId, otherId,
     if not self.realSiloActivatable then return end
     if not (g_localPlayer and otherId == g_localPlayer.rootNode) then return end
     if self:getOwnerFarmId() ~= g_currentMission:getFarmId() then return end
-    if onEnter then
-        realSiloRegisterInProximity(self, triggerId)
+    if onEnter or onStay then
+        realSiloRegisterInProximity(self, triggerId, onEnter)
     elseif onLeave then
         realSiloOnLeave(self, triggerId)
     end
@@ -820,8 +844,8 @@ PlaceableInfoTrigger.onInfoTriggerCallback = function(self, triggerId, otherId, 
     if not self.realSiloActivatable then return end
     if not (g_localPlayer and otherId == g_localPlayer.rootNode) then return end
     if self:getOwnerFarmId() ~= g_currentMission:getFarmId() then return end
-    if onEnter then
-        realSiloRegisterInProximity(self, triggerId)
+    if onEnter or onStay then
+        realSiloRegisterInProximity(self, triggerId, onEnter)
     elseif onLeave then
         realSiloOnLeave(self, triggerId)
     end
