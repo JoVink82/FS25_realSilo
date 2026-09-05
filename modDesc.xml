@@ -28,6 +28,7 @@ Changelog 1.2.0.4:
 - Fixed a serious fill-level error where opening a menu while unloading could repeatedly add the silo's existing physical total to the active compartment.
 - The F1 menu action now follows the actual trigger heartbeat and disappears reliably after leaving the silo area.
 - Moisture and quality are stored independently per compartment. Additional grain in the same compartment is mixed using a volume-weighted average without changing other compartments.
+- Fixed overfilling after changing a compartment capacity: existing grain in other compartments is no longer counted again when unloading into the active compartment.
 
 Changelog 1.2.0.3:
 - The open key no longer blocks other actions on the same key. The default key is now K instead of R, because R is the game's general "activate object" key (pressure washer, shops, doors). Existing players who already have it on R can change it under Options > Controls.
@@ -72,6 +73,7 @@ Changelog v1.2.0.4:
 - Ernstige inhoudsfout opgelost waarbij het openen van een menu tijdens het lossen het bestaande fysieke silototaal iedere frame opnieuw aan het actieve vak kon toevoegen.
 - De RealSilo-actie in het F1-menu volgt nu de heartbeat van de daadwerkelijke trigger en verdwijnt betrouwbaar na het verlaten van de silo.
 - Vocht en kwaliteit worden onafhankelijk per vak opgeslagen. Extra graan in hetzelfde vak wordt volumegewogen gemengd zonder andere vakken te wijzigen.
+- Overvullen na het wijzigen van een vakcapaciteit opgelost: bestaande inhoud uit andere vakken wordt niet meer opnieuw meegeteld bij het lossen in het actieve vak.
 
 Changelog v1.2.0.3:
 - De open-toets blokkeert geen andere acties meer op dezelfde toets. De standaardtoets is nu K in plaats van R, omdat R in het spel de algemene "object activeren"-toets is (hogedrukspuit, winkels, deuren). Wie hem al op R had staan, kan dat aanpassen via Opties > Besturing.
@@ -115,6 +117,7 @@ Changelog v1.2.0.4:
 - Schwerwiegenden Füllstandsfehler behoben, bei dem das Öffnen eines Menüs während des Entladens den vorhandenen physischen Silobestand in jedem Frame erneut zum aktiven Fach addieren konnte.
 - Die RealSilo-Aktion im F1-Menü folgt nun dem Heartbeat des tatsächlichen Triggers und verschwindet nach dem Verlassen des Silobereichs zuverlässig.
 - Feuchtigkeit und Qualität werden unabhängig je Fach gespeichert. Zusätzliches Getreide im selben Fach wird volumengewichtet gemischt, ohne andere Fächer zu verändern.
+- Überfüllung nach einer Änderung der Fachkapazität behoben: Vorhandenes Getreide aus anderen Fächern wird beim Entladen in das aktive Fach nicht erneut mitgezählt.
 
 Changelog v1.2.0.3:
 - Die Offnen-Taste blockiert keine anderen Aktionen auf derselben Taste mehr. Die Standardtaste ist jetzt K statt R, da R im Spiel die allgemeine "Objekt aktivieren"-Taste ist (Hochdruckreiniger, Laden, Turen). Wer sie bereits auf R hat, kann das unter Optionen > Steuerung andern.
