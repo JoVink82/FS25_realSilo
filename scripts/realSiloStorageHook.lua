@@ -280,12 +280,48 @@ if UnloadTrigger ~= nil and UnloadTrigger.addFillUnitFillLevel ~= nil then
 
         activeUnloadTransaction = parentTransaction
         if transaction.accepted > 0 then
+            -- Onthoud dat dit daadwerkelijk een RealSilo-unloadtrigger is.
+            -- Dischargeable gebruikt dit hieronder om uitsluitend voor deze
+            -- mod het lege-trailer-vangnet toe te passen.
+            self._realSiloUnloadTarget = true
             local accepted = math.min(fillLevelDelta, transaction.accepted)
             if applied == nil or accepted > applied then
                 return accepted
             end
         end
         return applied
+    end
+end
+
+-- GIANTS stopt normaal via onFillUnitFillLevelChanged wanneer het niveau
+-- exact 0 is. Door afronding tussen de virtuele compartiment-storage en de
+-- fysieke silo kan er echter een onzichtbare restfractie achterblijven. Stop
+-- daarom de kiepactie zelf zodra een trailer bij een RealSilo-trigger leeg is.
+-- Dit gebeurt op de server; setDischargeState zonder noEventSend stuurt OFF
+-- ook naar alle clients van een dedicated server.
+if Dischargeable ~= nil and Dischargeable.handleDischarge ~= nil then
+    local originalHandleDischarge = Dischargeable.handleDischarge
+    Dischargeable.handleDischarge = function(self, dischargeNode, dischargedLiters,
+            minDropReached, hasMinDropFillLevel)
+        originalHandleDischarge(self, dischargeNode, dischargedLiters,
+            minDropReached, hasMinDropFillLevel)
+
+        if not self.isServer or dischargeNode == nil then return end
+
+        local dischargeObject = dischargeNode.currentDischargeObject
+            or dischargeNode.dischargeObject
+        if dischargeObject == nil or dischargeObject._realSiloUnloadTarget ~= true then
+            return
+        end
+
+        local fillLevel = self:getFillUnitFillLevel(dischargeNode.fillUnitIndex)
+        if fillLevel <= 0.1
+                and self:getDischargeState() ~= Dischargeable.DISCHARGE_STATE_OFF then
+            RealSiloDebug.print(
+                "[realSilo] Trailer leeg: kiepactie server-side gestopt (rest=%.6f L)",
+                fillLevel)
+            self:setDischargeState(Dischargeable.DISCHARGE_STATE_OFF)
+        end
     end
 end
 
