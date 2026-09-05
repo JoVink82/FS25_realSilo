@@ -778,6 +778,10 @@ function RealSiloSlotSyncEvent:writeStream(streamId, connection)
         streamWriteUIntN(streamId, math.min(math.max(math.floor(s.fillLevel or 0), 0), 4294967295), 32)
         streamWriteUIntN(streamId, math.min(math.max(math.floor(s.capacity  or 0), 0), 4294967295), 32)
         streamWriteBool(streamId, s.isActive or false)
+        streamWriteBool(streamId, s.moisture ~= nil)
+        if s.moisture ~= nil then streamWriteFloat32(streamId, s.moisture) end
+        streamWriteBool(streamId, s.quality ~= nil)
+        if s.quality ~= nil then streamWriteFloat32(streamId, s.quality) end
     end
 end
 
@@ -787,12 +791,15 @@ function RealSiloSlotSyncEvent:readStream(streamId, connection)
     local n = streamReadUIntN(streamId, 6)
     self.slots = {}
     for _ = 1, n do
-        table.insert(self.slots, {
+        local incoming = {
             fillType  = streamReadUIntN(streamId, 14),
             fillLevel = streamReadUIntN(streamId, 32),
             capacity  = streamReadUIntN(streamId, 32),
             isActive  = streamReadBool(streamId),
-        })
+        }
+        if streamReadBool(streamId) then incoming.moisture = streamReadFloat32(streamId) end
+        if streamReadBool(streamId) then incoming.quality = streamReadFloat32(streamId) end
+        table.insert(self.slots, incoming)
     end
     self:run(connection)
 end
@@ -819,6 +826,8 @@ function RealSiloSlotSyncEvent:run(connection)
             slot.fillLevel = incoming.fillLevel
             if incoming.capacity > 0 then slot.capacity = incoming.capacity end
             slot.isActive  = incoming.isActive
+            slot.moisture  = incoming.moisture
+            slot.quality   = incoming.quality
         end
     end
 
@@ -844,6 +853,8 @@ local function buildSlotSyncData(uid)
             fillLevel = slot.fillLevel or 0,
             capacity  = slot.capacity  or 0,
             isActive  = slot.isActive  or false,
+            moisture  = slot.moisture,
+            quality   = slot.quality,
         })
     end
     return #slots > 0 and slots or nil
@@ -863,4 +874,3 @@ function RealSiloEvents.broadcastSlotSync(uid)
     if not slots then return end
     g_server:broadcastEvent(RealSiloSlotSyncEvent.new(uid, slots, true), true, nil, nil)
 end
-
