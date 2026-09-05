@@ -188,8 +188,15 @@ Storage.setFillLevel = function(self, fillLevel, fillType, fillInfo)
         local added = math.min(delta, room)
         if added <= 0 then return end
 
+        local oldActiveLevel = active.fillLevel
         active.fillLevel = active.fillLevel + added
         if active.fillType == 0 then active.fillType = fillType end
+
+        if RealSiloMoistureCompat ~= nil
+                and RealSiloMoistureCompat.recordStorageDeposit ~= nil then
+            RealSiloMoistureCompat.recordStorageDeposit(
+                uid, active, fillType, oldActiveLevel, added)
+        end
 
         local realCurrent = originalGetFillLevel(self, fillType)
         self._realSiloApplying = true
