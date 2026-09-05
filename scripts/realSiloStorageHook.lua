@@ -35,28 +35,6 @@ RealSiloStorageHook.getRealFillLevel = function(storage, fillType)
 end
 
 -- ----------------------------------------------------------------
--- Menu-context: staat er een menuscherm open?
---
--- Tijdens het SPELEN moeten getFillLevel/getFillLevels alleen het
--- ACTIEVE vak rapporteren -- daar hangt het gericht laden/lossen per
--- compartiment van af (de LoadTrigger leidt hieruit af hoeveel er
--- beschikbaar is, en vraagt dus nooit meer dan er in het vak zit).
---
--- In een MENU (het financien-/prijzenoverzicht, statistieken) wil je
--- juist de totale voorraad van de silo zien, niet alleen het actieve
--- vak. Daarom rapporteren we daar het echte totaal.
---
--- Ons eigen RealSilo-menu leest rechtstreeks uit de boekhouding en
--- wordt hier dus niet door beinvloed.
--- ----------------------------------------------------------------
-local function isMenuOpen()
-    if g_gui == nil then return false end
-    local ok, visible = pcall(function() return g_gui:getIsGuiVisible() end)
-    return ok and visible == true
-end
-RealSiloStorageHook.isMenuOpen = isMenuOpen
-
--- ----------------------------------------------------------------
 -- getFillLevels (MEERVOUD): toont alleen het actieve vak aan
 -- laad-triggers zodat de "selecteer silo"-dialoog slechts één
 -- product tegelijk aanbiedt. Ongeconfigureerde silo's: pass-through.
@@ -66,10 +44,6 @@ if originalGetFillLevels ~= nil then
         local uid  = realSiloStorageLink[self]
         local data = uid and RealSiloCompartmentStorage.siloSlots[uid]
         if not data or not realSiloManager.isConfigured(uid) then
-            return originalGetFillLevels(self)
-        end
-        -- In een menu: echte totalen tonen (overzicht/prijzen).
-        if isMenuOpen() then
             return originalGetFillLevels(self)
         end
         local active = data.slots[data.activeSlot]
@@ -90,17 +64,15 @@ local function virtualFillLevel(data, self, fillType)
 end
 
 -- ----------------------------------------------------------------
--- getFillLevel: tijdens spelen alleen het actieve vak (nodig voor
--- gericht laden per compartiment); in een menu het echte totaal
--- (financien-/prijzenoverzicht toont zo de hele silo).
+-- getFillLevel: voor een geconfigureerde silo altijd alleen het actieve vak.
+-- Een algemene GUI-controle is hier onveilig: laad- en lostriggers blijven
+-- ook doorlopen terwijl een menu zichtbaar is. Het fysieke silototaal zou
+-- dan iedere frame opnieuw als stort-delta op het actieve vak terechtkomen.
 -- ----------------------------------------------------------------
 Storage.getFillLevel = function(self, fillType)
     local uid  = realSiloStorageLink[self]
     local data = uid and RealSiloCompartmentStorage.siloSlots[uid]
     if not data or not realSiloManager.isConfigured(uid) then
-        return originalGetFillLevel(self, fillType)
-    end
-    if isMenuOpen() then
         return originalGetFillLevel(self, fillType)
     end
     return virtualFillLevel(data, self, fillType)
