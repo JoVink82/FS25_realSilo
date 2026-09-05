@@ -30,8 +30,6 @@ local originalGetCapacity     = Storage.getCapacity
 local originalSetFillLevel    = Storage.setFillLevel
 
 RealSiloStorageHook = RealSiloStorageHook or {}
-local activeUnloadTransaction = nil
-
 RealSiloStorageHook.getRealFillLevel = function(storage, fillType)
     return originalGetFillLevel(storage, fillType)
 end
@@ -221,15 +219,6 @@ Storage.setFillLevel = function(self, fillLevel, fillType, fillInfo)
         active.fillLevel = active.fillLevel + added
         if active.fillType == 0 then active.fillType = fillType end
 
-        -- UnloadTrigger moet exact weten hoeveel liter door het actieve vak
-        -- is geaccepteerd. De standaard UnloadingStation leidt dit af uit de
-        -- fysieke Storage, terwijl wij tijdens het spelen een virtueel
-        -- compartimentniveau rapporteren. Vooral bij de laatste fractie liter
-        -- kan die afleiding daardoor 0 opleveren en blijft de trailer kiepen.
-        if activeUnloadTransaction ~= nil then
-            activeUnloadTransaction.accepted = activeUnloadTransaction.accepted + added
-        end
-
         local realCurrent = originalGetFillLevel(self, fillType)
         self._realSiloApplying = true
         originalSetFillLevel(self, realCurrent + added, fillType, fillInfo)
@@ -258,71 +247,6 @@ Storage.setFillLevel = function(self, fillLevel, fillType, fillInfo)
             self._realSiloApplying = true
             originalSetFillLevel(self, math.max(realCurrent - totalDrained, 0), fillType, fillInfo)
             self._realSiloApplying = false
-        end
-    end
-end
-
--- Geef bij lossen het werkelijk door RealSilo geboekte volume terug aan het
--- voertuig. Dischargeable trekt precies deze returnwaarde van de FillUnit af;
--- op 0 wordt de trailer dus nooit exact leeg en stopt de kiepanimatie niet.
--- Deze transactie draait synchroon in de server-call en werkt daardoor zowel
--- in singleplayer als op een dedicated server, zonder client-side correctie.
-if UnloadTrigger ~= nil and UnloadTrigger.addFillUnitFillLevel ~= nil then
-    local originalUnloadAddFillUnitFillLevel = UnloadTrigger.addFillUnitFillLevel
-    UnloadTrigger.addFillUnitFillLevel = function(self, farmId, fillUnitIndex,
-            fillLevelDelta, fillTypeIndex, toolType, fillPositionData, extraAttributes)
-        local parentTransaction = activeUnloadTransaction
-        local transaction = { accepted = 0 }
-        activeUnloadTransaction = transaction
-
-        local applied = originalUnloadAddFillUnitFillLevel(self, farmId, fillUnitIndex,
-            fillLevelDelta, fillTypeIndex, toolType, fillPositionData, extraAttributes)
-
-        activeUnloadTransaction = parentTransaction
-        self._realSiloLastAcceptedAmount = transaction.accepted
-        if transaction.accepted > 0 then
-            -- Onthoud dat dit daadwerkelijk een RealSilo-unloadtrigger is.
-            -- Dischargeable gebruikt dit hieronder om uitsluitend voor deze
-            -- mod het lege-trailer-vangnet toe te passen.
-            self._realSiloUnloadTarget = true
-            local accepted = math.min(fillLevelDelta, transaction.accepted)
-            if applied == nil or accepted > applied then
-                return accepted
-            end
-        end
-        return applied
-    end
-end
-
--- GIANTS stopt normaal via onFillUnitFillLevelChanged wanneer het niveau
--- exact 0 is. Door afronding tussen de virtuele compartiment-storage en de
--- fysieke silo kan er echter een onzichtbare restfractie achterblijven. Stop
--- daarom de kiepactie zelf zodra een trailer bij een RealSilo-trigger leeg is.
--- Dit gebeurt op de server; setDischargeState zonder noEventSend stuurt OFF
--- ook naar alle clients van een dedicated server.
-if Dischargeable ~= nil and Dischargeable.handleDischarge ~= nil then
-    local originalHandleDischarge = Dischargeable.handleDischarge
-    Dischargeable.handleDischarge = function(self, dischargeNode, dischargedLiters,
-            minDropReached, hasMinDropFillLevel)
-        originalHandleDischarge(self, dischargeNode, dischargedLiters,
-            minDropReached, hasMinDropFillLevel)
-
-        if not self.isServer or dischargeNode == nil then return end
-
-        local dischargeObject = dischargeNode.currentDischargeObject
-            or dischargeNode.dischargeObject
-        if dischargeObject == nil or dischargeObject._realSiloUnloadTarget ~= true then
-            return
-        end
-
-        local fillLevel = self:getFillUnitFillLevel(dischargeNode.fillUnitIndex)
-        local accepted = dischargeObject._realSiloLastAcceptedAmount or math.huge
-        if (fillLevel <= 1 or (accepted > 0 and accepted <= 0.1))
-                and self:getDischargeState() ~= Dischargeable.DISCHARGE_STATE_OFF then
-            RealSiloDebug.print(
-                "[realSilo] Trailer leeg: kiepactie server-side gestopt (rest=%.6f L, geaccepteerd=%.6f L)",
-                fillLevel, accepted)
-            self:setDischargeState(Dischargeable.DISCHARGE_STATE_OFF)
         end
     end
 end
