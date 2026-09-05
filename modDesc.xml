@@ -29,6 +29,7 @@ Changelog 1.2.0.4:
 - The F1 menu action now follows the actual trigger heartbeat and disappears reliably after leaving the silo area.
 - Moisture and quality are stored independently per compartment. Additional grain in the same compartment is mixed using a volume-weighted average without changing other compartments.
 - Fixed overfilling after changing a compartment capacity: existing grain in other compartments is no longer counted again when unloading into the active compartment.
+- Fixed the RealSilo key becoming stuck in the F1 menu or no longer opening the menu after leaving and re-entering a trigger.
 
 Changelog 1.2.0.3:
 - The open key no longer blocks other actions on the same key. The default key is now K instead of R, because R is the game's general "activate object" key (pressure washer, shops, doors). Existing players who already have it on R can change it under Options > Controls.
@@ -74,6 +75,7 @@ Changelog v1.2.0.4:
 - De RealSilo-actie in het F1-menu volgt nu de heartbeat van de daadwerkelijke trigger en verdwijnt betrouwbaar na het verlaten van de silo.
 - Vocht en kwaliteit worden onafhankelijk per vak opgeslagen. Extra graan in hetzelfde vak wordt volumegewogen gemengd zonder andere vakken te wijzigen.
 - Overvullen na het wijzigen van een vakcapaciteit opgelost: bestaande inhoud uit andere vakken wordt niet meer opnieuw meegeteld bij het lossen in het actieve vak.
+- Opgelost dat de RealSilo-toets in het F1-menu kon blijven staan of het menu na opnieuw betreden van een trigger niet meer opende.
 
 Changelog v1.2.0.3:
 - De open-toets blokkeert geen andere acties meer op dezelfde toets. De standaardtoets is nu K in plaats van R, omdat R in het spel de algemene "object activeren"-toets is (hogedrukspuit, winkels, deuren). Wie hem al op R had staan, kan dat aanpassen via Opties > Besturing.
@@ -118,6 +120,7 @@ Changelog v1.2.0.4:
 - Die RealSilo-Aktion im F1-Menü folgt nun dem Heartbeat des tatsächlichen Triggers und verschwindet nach dem Verlassen des Silobereichs zuverlässig.
 - Feuchtigkeit und Qualität werden unabhängig je Fach gespeichert. Zusätzliches Getreide im selben Fach wird volumengewichtet gemischt, ohne andere Fächer zu verändern.
 - Überfüllung nach einer Änderung der Fachkapazität behoben: Vorhandenes Getreide aus anderen Fächern wird beim Entladen in das aktive Fach nicht erneut mitgezählt.
+- Behoben, dass die RealSilo-Taste im F1-Menü hängen bleiben oder das Menü nach erneutem Betreten eines Triggers nicht mehr öffnen konnte.
 
 Changelog v1.2.0.3:
 - Die Offnen-Taste blockiert keine anderen Aktionen auf derselben Taste mehr. Die Standardtaste ist jetzt K statt R, da R im Spiel die allgemeine "Objekt aktivieren"-Taste ist (Hochdruckreiniger, Laden, Turen). Wer sie bereits auf R hat, kann das unter Optionen > Steuerung andern.
