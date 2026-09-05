@@ -279,6 +279,7 @@ if UnloadTrigger ~= nil and UnloadTrigger.addFillUnitFillLevel ~= nil then
             fillLevelDelta, fillTypeIndex, toolType, fillPositionData, extraAttributes)
 
         activeUnloadTransaction = parentTransaction
+        self._realSiloLastAcceptedAmount = transaction.accepted
         if transaction.accepted > 0 then
             -- Onthoud dat dit daadwerkelijk een RealSilo-unloadtrigger is.
             -- Dischargeable gebruikt dit hieronder om uitsluitend voor deze
@@ -315,11 +316,12 @@ if Dischargeable ~= nil and Dischargeable.handleDischarge ~= nil then
         end
 
         local fillLevel = self:getFillUnitFillLevel(dischargeNode.fillUnitIndex)
-        if fillLevel <= 0.1
+        local accepted = dischargeObject._realSiloLastAcceptedAmount or math.huge
+        if (fillLevel <= 1 or (accepted > 0 and accepted <= 0.1))
                 and self:getDischargeState() ~= Dischargeable.DISCHARGE_STATE_OFF then
             RealSiloDebug.print(
-                "[realSilo] Trailer leeg: kiepactie server-side gestopt (rest=%.6f L)",
-                fillLevel)
+                "[realSilo] Trailer leeg: kiepactie server-side gestopt (rest=%.6f L, geaccepteerd=%.6f L)",
+                fillLevel, accepted)
             self:setDischargeState(Dischargeable.DISCHARGE_STATE_OFF)
         end
     end
