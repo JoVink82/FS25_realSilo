@@ -162,8 +162,15 @@ Storage.setFillLevel = function(self, fillLevel, fillType, fillInfo)
         end
     end
 
-    local virtualCurrent = virtualFillLevel(data, self, fillType)
-    local delta = fillLevel - virtualCurrent
+    -- setFillLevel ontvangt van GIANTS een ABSOLUUT niveau van de echte
+    -- Storage, niet van ons virtuele actieve vak. Trek daarom ook het echte
+    -- niveau af. Met het virtuele vakniveau als basis werd de inhoud van
+    -- andere vakken van hetzelfde product nogmaals als storting gezien.
+    -- Voorbeeld: er staat fysiek al 700 l tarwe in een ander vak en er wordt
+    -- 1.000 l in een leeg actief vak gestort; de oude berekening maakte daar
+    -- ten onrechte 1.700 l van.
+    local realCurrentBefore = originalGetFillLevel(self, fillType)
+    local delta = fillLevel - realCurrentBefore
 
     -- Geen epsilon gebruiken voor live storage-mutaties. GIANTS laat een
     -- FillUnit pas exact leeglopen wanneer ook de laatste fractie liter is
@@ -198,9 +205,8 @@ Storage.setFillLevel = function(self, fillLevel, fillType, fillInfo)
                 uid, active, fillType, oldActiveLevel, added)
         end
 
-        local realCurrent = originalGetFillLevel(self, fillType)
         self._realSiloApplying = true
-        originalSetFillLevel(self, realCurrent + added, fillType, fillInfo)
+        originalSetFillLevel(self, realCurrentBefore + added, fillType, fillInfo)
         self._realSiloApplying = false
 
     elseif delta < 0 then
@@ -222,9 +228,8 @@ Storage.setFillLevel = function(self, fillLevel, fillType, fillInfo)
         if active then drain(active) end
 
         if totalDrained > 0 then
-            local realCurrent = originalGetFillLevel(self, fillType)
             self._realSiloApplying = true
-            originalSetFillLevel(self, math.max(realCurrent - totalDrained, 0), fillType, fillInfo)
+            originalSetFillLevel(self, math.max(realCurrentBefore - totalDrained, 0), fillType, fillInfo)
             self._realSiloApplying = false
         end
     end
