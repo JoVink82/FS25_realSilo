@@ -25,6 +25,7 @@ Changelog 1.2.0.4:
 - Silo configuration and compartment distribution are now handled authoritatively by the server, preventing duplicate processing in multiplayer and on dedicated servers.
 - The menu prompt is now controlled by the actual silo trigger shape instead of an estimated distance, and selling/buying stations are no longer detected as farm silos.
 - Restored compatibility with FS25_MoistureSystem 2.0.0.6: moisture and grain classification are retained per compartment and shown in the RealSilo menu, including extension compartments.
+- Fixed a serious fill-level error where opening a menu while unloading could repeatedly add the silo's existing physical total to the active compartment.
 
 Changelog 1.2.0.3:
 - The open key no longer blocks other actions on the same key. The default key is now K instead of R, because R is the game's general "activate object" key (pressure washer, shops, doors). Existing players who already have it on R can change it under Options > Controls.
@@ -66,6 +67,7 @@ Changelog v1.2.0.4:
 - Siloconfiguratie en vakverdeling worden nu leidend door de server verwerkt. Dit voorkomt dubbele verwerking in multiplayer en op dedicated servers.
 - De menumelding wordt nu bepaald door de daadwerkelijke trigger-vorm van de silo in plaats van een geschatte afstand. Verkoop- en koopstations worden niet langer als boerderijsilo herkend.
 - Compatibiliteit met FS25_MoistureSystem 2.0.0.6 hersteld: vocht en graanclassificatie blijven per vak behouden en worden in het RealSilo-menu getoond, ook bij extension-vakken.
+- Ernstige inhoudsfout opgelost waarbij het openen van een menu tijdens het lossen het bestaande fysieke silototaal iedere frame opnieuw aan het actieve vak kon toevoegen.
 
 Changelog v1.2.0.3:
 - De open-toets blokkeert geen andere acties meer op dezelfde toets. De standaardtoets is nu K in plaats van R, omdat R in het spel de algemene "object activeren"-toets is (hogedrukspuit, winkels, deuren). Wie hem al op R had staan, kan dat aanpassen via Opties > Besturing.
@@ -106,6 +108,7 @@ Changelog v1.2.0.4:
 - Silokonfiguration und Fachverteilung werden nun verbindlich vom Server verarbeitet. Dadurch wird eine doppelte Verarbeitung im Multiplayer und auf Dedicated Servern verhindert.
 - Der Menühinweis richtet sich jetzt nach der tatsächlichen Triggerform des Silos statt nach einer geschätzten Entfernung. Verkaufs- und Kaufstationen werden nicht mehr als Hofsilos erkannt.
 - Kompatibilität mit FS25_MoistureSystem 2.0.0.6 wiederhergestellt: Feuchtigkeit und Getreideklassifizierung bleiben je Fach erhalten und werden im RealSilo-Menü angezeigt, auch bei Erweiterungsfächern.
+- Schwerwiegenden Füllstandsfehler behoben, bei dem das Öffnen eines Menüs während des Entladens den vorhandenen physischen Silobestand in jedem Frame erneut zum aktiven Fach addieren konnte.
 
 Changelog v1.2.0.3:
 - Die Offnen-Taste blockiert keine anderen Aktionen auf derselben Taste mehr. Die Standardtaste ist jetzt K statt R, da R im Spiel die allgemeine "Objekt aktivieren"-Taste ist (Hochdruckreiniger, Laden, Turen). Wer sie bereits auf R hat, kann das unter Optionen > Steuerung andern.
