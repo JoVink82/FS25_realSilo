@@ -622,6 +622,24 @@ function RealSiloCompartmentStorage.getEffectiveMoistureInfo(placeable, slot, ui
         return { moisture = slot.moisture, quality = slot.quality }
     end
 
+    -- Oude/opgeslagen vakken kunnen al graan bevatten zonder dat
+    -- MoistureSystem voor deze silo ooit een objectInfo-record heeft
+    -- aangemaakt. Geef zo'n vak een geldige standaardwaarde; anders ziet
+    -- het Grain Drying-menu wel liters maar kan het niet bepalen of drogen
+    -- nodig is en blijft de startknop uitgeschakeld.
+    if slot.fillLevel ~= nil and slot.fillLevel > 0
+            and ms.getDefaultMoisture ~= nil then
+        local okDefault, defaultMoisture = pcall(ms.getDefaultMoisture, ms)
+        if okDefault and defaultMoisture ~= nil then
+            slot.moisture = defaultMoisture
+            if ms.deriveQuality ~= nil then
+                local okQuality, quality = pcall(ms.deriveQuality, ms, slot.fillType, defaultMoisture)
+                if okQuality then slot.quality = quality end
+            end
+            return { moisture = slot.moisture, quality = slot.quality }
+        end
+    end
+
     -- v9 -- DIAG: getObjectInfo gaf niets terug. Om definitief vast te
     -- stellen of dit een verkeerde sleutel is (data bestaat wel, maar
     -- onder een andere naam/uid) of een echt lege boekhouding, dumpen we
