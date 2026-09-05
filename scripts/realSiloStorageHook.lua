@@ -30,6 +30,8 @@ local originalGetCapacity     = Storage.getCapacity
 local originalSetFillLevel    = Storage.setFillLevel
 
 RealSiloStorageHook = RealSiloStorageHook or {}
+local activeUnloadTransaction = nil
+
 RealSiloStorageHook.getRealFillLevel = function(storage, fillType)
     return originalGetFillLevel(storage, fillType)
 end
@@ -219,6 +221,15 @@ Storage.setFillLevel = function(self, fillLevel, fillType, fillInfo)
         active.fillLevel = active.fillLevel + added
         if active.fillType == 0 then active.fillType = fillType end
 
+        -- UnloadTrigger moet exact weten hoeveel liter door het actieve vak
+        -- is geaccepteerd. De standaard UnloadingStation leidt dit af uit de
+        -- fysieke Storage, terwijl wij tijdens het spelen een virtueel
+        -- compartimentniveau rapporteren. Vooral bij de laatste fractie liter
+        -- kan die afleiding daardoor 0 opleveren en blijft de trailer kiepen.
+        if activeUnloadTransaction ~= nil then
+            activeUnloadTransaction.accepted = activeUnloadTransaction.accepted + added
+        end
+
         local realCurrent = originalGetFillLevel(self, fillType)
         self._realSiloApplying = true
         originalSetFillLevel(self, realCurrent + added, fillType, fillInfo)
@@ -248,6 +259,33 @@ Storage.setFillLevel = function(self, fillLevel, fillType, fillInfo)
             originalSetFillLevel(self, math.max(realCurrent - totalDrained, 0), fillType, fillInfo)
             self._realSiloApplying = false
         end
+    end
+end
+
+-- Geef bij lossen het werkelijk door RealSilo geboekte volume terug aan het
+-- voertuig. Dischargeable trekt precies deze returnwaarde van de FillUnit af;
+-- op 0 wordt de trailer dus nooit exact leeg en stopt de kiepanimatie niet.
+-- Deze transactie draait synchroon in de server-call en werkt daardoor zowel
+-- in singleplayer als op een dedicated server, zonder client-side correctie.
+if UnloadTrigger ~= nil and UnloadTrigger.addFillUnitFillLevel ~= nil then
+    local originalUnloadAddFillUnitFillLevel = UnloadTrigger.addFillUnitFillLevel
+    UnloadTrigger.addFillUnitFillLevel = function(self, farmId, fillUnitIndex,
+            fillLevelDelta, fillTypeIndex, toolType, fillPositionData, extraAttributes)
+        local parentTransaction = activeUnloadTransaction
+        local transaction = { accepted = 0 }
+        activeUnloadTransaction = transaction
+
+        local applied = originalUnloadAddFillUnitFillLevel(self, farmId, fillUnitIndex,
+            fillLevelDelta, fillTypeIndex, toolType, fillPositionData, extraAttributes)
+
+        activeUnloadTransaction = parentTransaction
+        if transaction.accepted > 0 then
+            local accepted = math.min(fillLevelDelta, transaction.accepted)
+            if applied == nil or accepted > applied then
+                return accepted
+            end
+        end
+        return applied
     end
 end
 
