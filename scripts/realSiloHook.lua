@@ -31,6 +31,8 @@ local realSiloGlobalEventId     = nil
 local function realSiloUpdatePromptText()
     if realSiloGlobalEventId == nil or g_inputBinding == nil then return end
     local active = (realSiloActiveTriggerSilo ~= nil)
+    RealSiloDebug.print("[realSilo][DIAG] prompt zichtbaar=%s (event=%s)",
+        tostring(active), tostring(realSiloGlobalEventId))
     pcall(function() g_inputBinding:setActionEventTextVisibility(realSiloGlobalEventId, active) end)
     if active then
         pcall(function()
@@ -38,6 +40,47 @@ local function realSiloUpdatePromptText()
                 g_i18n:getText("realSilo_configureAction") or "RealSilo")
         end)
     end
+end
+
+-- Diagnose: welke toets is er aan REALSILO_OPEN gekoppeld? Als de
+-- binding leeg is, bestaat de actie wel maar heeft hij geen toets --
+-- dan verschijnt er geen prompt en reageert er niets. Dat is niet uit
+-- een serverlog af te leiden, vandaar deze melding bij mission-start.
+local function realSiloLogBinding()
+    if g_inputBinding == nil then
+        RealSiloDebug.print("[realSilo][DIAG] binding: g_inputBinding niet beschikbaar")
+        return
+    end
+    if InputAction.REALSILO_OPEN == nil then
+        RealSiloDebug.print("[realSilo][DIAG] binding: InputAction.REALSILO_OPEN BESTAAT NIET")
+        return
+    end
+
+    local shown = false
+    -- Meerdere API-varianten proberen; welke bestaat verschilt per versie.
+    for _, fn in ipairs({ "getDisplayKeyNamesForActionString",
+                          "getDisplayKeyNamesForAction",
+                          "getButtonsForActionName" }) do
+        if not shown and g_inputBinding[fn] ~= nil then
+            local ok, res = pcall(function()
+                return g_inputBinding[fn](g_inputBinding, InputAction.REALSILO_OPEN)
+            end)
+            if ok and res ~= nil and tostring(res) ~= "" then
+                RealSiloDebug.print("[realSilo][DIAG] binding REALSILO_OPEN (%s): %s",
+                    fn, tostring(res))
+                shown = true
+            end
+        end
+    end
+    if not shown then
+        RealSiloDebug.print("[realSilo][DIAG] binding REALSILO_OPEN: GEEN toets gevonden (actie bestaat wel)")
+    end
+end
+
+if Mission00 ~= nil and Mission00.onStartMission ~= nil then
+    Mission00.onStartMission = Utils.appendedFunction(Mission00.onStartMission, function()
+        realSiloLogBinding()
+    end)
 end
 
 local function realSiloEnsureGlobalEvent()
@@ -54,6 +97,7 @@ local function realSiloEnsureGlobalEvent()
         end,
         false, true, false, true)
     realSiloGlobalEventId = eventId
+    RealSiloDebug.print("[realSilo][DIAG] open-toets event geregistreerd: id=%s", tostring(eventId))
 end
 
 -- Event volledig verwijderen zodra de speler geen enkele silo-trigger
@@ -122,6 +166,7 @@ end
 
 -- Speler betreedt de trigger van een eigen silo.
 local function realSiloRegisterInProximity(self)
+    RealSiloDebug.print("[realSilo][DIAG] trigger BINNEN bij uid=%s", tostring(self.realSiloUniqueId))
     realSiloEnteredSet[self] = true
     realSiloActiveTriggerSilo = self
     realSiloEnsureGlobalEvent()
@@ -711,8 +756,23 @@ end
 -- spel en andere mods).
 -- ================================================================
 local originalPlayerTrigger = PlaceableSilo.onPlayerActionTriggerCallback
+RealSiloDebug.print("[realSilo][DIAG] hook-check: PlaceableSilo.onPlayerActionTriggerCallback bestaat=%s",
+    tostring(originalPlayerTrigger ~= nil))
 PlaceableSilo.onPlayerActionTriggerCallback = function(self, triggerId, otherId, onEnter, onLeave, onStay)
     originalPlayerTrigger(self, triggerId, otherId, onEnter, onLeave, onStay)
+    -- Diagnose: welke voorwaarde blokkeert? In een clientlog bleek deze
+    -- callback nooit tot registratie te komen (geen enkele "trigger BINNEN"),
+    -- waardoor de open-toets nooit werd aangemaakt.
+    if RealSiloDebug and RealSiloDebug.enabled then
+        RealSiloDebug.print(
+            "[realSilo][DIAG] playerTrigger: activatable=%s localPlayer=%s otherIdMatch=%s ownerFarm=%s spelerFarm=%s onEnter=%s",
+            tostring(self.realSiloActivatable ~= nil),
+            tostring(g_localPlayer ~= nil),
+            tostring(g_localPlayer ~= nil and otherId == g_localPlayer.rootNode),
+            tostring(self.getOwnerFarmId and self:getOwnerFarmId()),
+            tostring(g_currentMission and g_currentMission:getFarmId()),
+            tostring(onEnter))
+    end
     if not self.realSiloActivatable then return end
     if not (g_localPlayer and otherId == g_localPlayer.rootNode) then return end
     if self:getOwnerFarmId() ~= g_currentMission:getFarmId() then return end
@@ -724,8 +784,20 @@ PlaceableSilo.onPlayerActionTriggerCallback = function(self, triggerId, otherId,
 end
 
 local originalInfoTrigger = PlaceableInfoTrigger.onInfoTriggerCallback
+RealSiloDebug.print("[realSilo][DIAG] hook-check: PlaceableInfoTrigger.onInfoTriggerCallback bestaat=%s",
+    tostring(originalInfoTrigger ~= nil))
 PlaceableInfoTrigger.onInfoTriggerCallback = function(self, triggerId, otherId, onEnter, onLeave, onStay)
     originalInfoTrigger(self, triggerId, otherId, onEnter, onLeave, onStay)
+    if RealSiloDebug and RealSiloDebug.enabled then
+        RealSiloDebug.print(
+            "[realSilo][DIAG] infoTrigger: activatable=%s localPlayer=%s otherIdMatch=%s ownerFarm=%s spelerFarm=%s onEnter=%s",
+            tostring(self.realSiloActivatable ~= nil),
+            tostring(g_localPlayer ~= nil),
+            tostring(g_localPlayer ~= nil and otherId == g_localPlayer.rootNode),
+            tostring(self.getOwnerFarmId and self:getOwnerFarmId()),
+            tostring(g_currentMission and g_currentMission:getFarmId()),
+            tostring(onEnter))
+    end
     if not self.realSiloActivatable then return end
     if not (g_localPlayer and otherId == g_localPlayer.rootNode) then return end
     if self:getOwnerFarmId() ~= g_currentMission:getFarmId() then return end

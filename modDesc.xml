@@ -115,15 +115,17 @@ Changelog v1.1.0.1:
     <iconFilename>icon_RealSilo.dds</iconFilename>
 
     <actions>
-        <!-- isSink="false": de toets wordt NIET opgeslokt. Stond dit op
-             true, dan blokkeerde RealSilo de toets voor het spel zelf
-             (gemeld: hogedrukspuit niet meer op te pakken).
-             Standaard KEY_k in plaats van KEY_r, omdat R in FS25 de
-             algemene "object activeren"-toets is (hogedrukspuit, winkels,
-             deuren). Wie R toch wil, kan dat instellen via
-             Opties > Besturing. -->
-        <action name="REALSILO_OPEN" axisType="HALF_POSITIVE_AXIS" triggerAlways="false" isSink="false"/>
-        <action name="REALSILO_TRANSFER" axisType="HALF_POSITIVE_AXIS" triggerAlways="false" isSink="false"/>
+        <!-- Standaardtoets KEY_k, niet KEY_r. R is in FS25 de algemene
+             toets voor "object activeren" (hogedrukspuit, winkels,
+             deuren). Toen deze actie op R stond, blokkeerde RealSilo die
+             toets voor het spel zelf; gemeld als "hogedrukspuit niet meer
+             op te pakken".
+             isSink blijft true: de actie moet de toets toegewezen krijgen,
+             anders vuurt de callback niet en gaat het menu niet open. Met
+             K als toets is er geen botsing meer met het spel, dus is dit
+             nu veilig. De toets is aanpasbaar via Opties, Besturing. -->
+        <action name="REALSILO_OPEN" axisType="HALF_POSITIVE_AXIS" triggerAlways="false" isSink="true"/>
+        <action name="REALSILO_TRANSFER" axisType="HALF_POSITIVE_AXIS" triggerAlways="false" isSink="true"/>
     </actions>
     <inputBinding>
         <actionBinding action="REALSILO_OPEN">

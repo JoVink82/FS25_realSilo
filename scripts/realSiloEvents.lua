@@ -131,7 +131,13 @@ function RealSiloConfigEvent.apply(uid, numComps, capacity, name, transferRate, 
     -- weet dat de admin hem nog niet heeft ingesteld.
     if ok and (serverConfirmsConfigured or g_server ~= nil) then
         realSiloManager.setConfigured(uid)
-        RealSiloCompartmentStorage.captureAndDistribute(uid)
+        -- Alleen de SERVER verdeelt bestaande inhoud over de vakken.
+        -- Op een client werd dit twee keer uitgevoerd (eerst lokaal bij het
+        -- opslaan, daarna nogmaals via de broadcast van de server), wat de
+        -- boekhouding scheeftrok en het lossen kon blokkeren.
+        if g_server ~= nil then
+            RealSiloCompartmentStorage.captureAndDistribute(uid)
+        end
         RealSiloEvents.broadcastSlotSync(uid)
     end
     RealSiloEvents.refreshDialog(uid)
@@ -143,6 +149,17 @@ function RealSiloConfigEvent:run(connection)
         "[realSilo][DIAG] ConfigEvent:run uid=%s numComps=%d isBroadcast=%s g_server=%s connection=%s isServerConfigured=%s",
         tostring(self.uid), self.numComps, tostring(self.isBroadcast),
         tostring(g_server ~= nil), tostring(connection ~= nil), tostring(self.isServerConfigured))
+    -- Een BROADCAST is bedoeld voor de andere clients. Komt hij op de
+    -- SERVER binnen, dan is die wijziging daar al verwerkt en moet er
+    -- niets meer gebeuren. Zonder deze controle voerde de server elke
+    -- configuratie twee keer uit (zichtbaar in het log als twee keer
+    -- "Config:" en twee keer captureAndDistribute in dezelfde
+    -- milliseconde), waardoor de vakverdeling opnieuw werd berekend op
+    -- een al gewijzigde toestand.
+    if g_server ~= nil and self.isBroadcast then
+        return
+    end
+
     if g_server ~= nil and connection ~= nil and not self.isBroadcast then
         if not RealSiloUtil.canManageSilo(self.uid, connection) then
             RealSiloDebug.print("[realSilo] Config-wijziging geweigerd: geen toestemming")

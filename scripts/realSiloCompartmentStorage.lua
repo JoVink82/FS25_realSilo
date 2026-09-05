@@ -435,6 +435,7 @@ end
 -- dus de werkelijke storage heeft de correcte waarden.
 -- ----------------------------------------------------------------
 function RealSiloCompartmentStorage.captureAndDistribute(uid)
+    RealSiloDebug.print("[realSilo][DIAG] captureAndDistribute AANGEROEPEN voor %s", tostring(uid))
     local data = RealSiloCompartmentStorage.siloSlots[uid]
     if not data then return end
 

@@ -93,9 +93,28 @@ function RealSiloUtil.isFarmSiloStorage(storage)
 end
 
 -- Minstens één van de storages van deze PlaceableSilo moet farmSilo zijn.
+-- Verkoop-/koopstations uitsluiten.
+--
+-- Sommige verkooppunten (bv. de graanelevator op de basiskaart,
+-- data/placeables/mapUS/sellingPoints/grainElevatorTriggers.xml) hebben
+-- ook een silo-spec met FARMSILO-producten. Die werden daardoor als
+-- boerderijsilo geregistreerd en door de mod beheerd, terwijl het
+-- verkooppunten zijn die de speler niet bezit. Dat hoort niet: de mod
+-- beheert alleen silo's van de boerderij.
+local function isSellingOrBuyingStation(placeable)
+    if placeable == nil then return false end
+    if placeable.spec_sellingStation ~= nil then return true end
+    if placeable.spec_buyingStation  ~= nil then return true end
+    return false
+end
+
 function RealSiloUtil.isFarmSiloPlaceableSilo(placeable)
     local spec = placeable and placeable.spec_silo
     if not spec or not spec.storages then return false end
+    if isSellingOrBuyingStation(placeable) then
+        RealSiloDebug.print("[realSilo] Silo genegeerd: is een verkoop-/koopstation")
+        return false
+    end
     for _, storage in ipairs(spec.storages) do
         if RealSiloUtil.isFarmSiloStorage(storage) then
             return true

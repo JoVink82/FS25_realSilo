@@ -122,12 +122,26 @@ Storage.getFreeCapacity = function(self, fillType)
         return originalGetFreeCapacity(self, fillType)
     end
     local active = data.slots[data.activeSlot]
-    if not active then return 0 end
-    if active.storage ~= self then return 0 end
+    if not active then
+        RealSiloDebug.print("[realSilo][DIAG] getFreeCapacity=0: geen actief vak (uid=%s slot=%s)",
+            tostring(uid), tostring(data.activeSlot))
+        return 0
+    end
+    if active.storage ~= self then
+        RealSiloDebug.print("[realSilo][DIAG] getFreeCapacity=0: actief vak %d hoort bij andere storage (uid=%s)",
+            data.activeSlot, tostring(uid))
+        return 0
+    end
     if active.fillType ~= 0 and fillType ~= nil and active.fillType ~= fillType then
+        RealSiloDebug.print("[realSilo][DIAG] getFreeCapacity=0: vak %d heeft ft=%s, gevraagd ft=%s (uid=%s)",
+            data.activeSlot, tostring(active.fillType), tostring(fillType), tostring(uid))
         return 0
     end
     local free = math.max(active.capacity - active.fillLevel, 0)
+    if free <= 0 then
+        RealSiloDebug.print("[realSilo][DIAG] getFreeCapacity=0: vak %d vol (%.0f/%.0f, uid=%s)",
+            data.activeSlot, active.fillLevel, active.capacity, tostring(uid))
+    end
     RealSiloDebug.print(
         "[realSilo] getFreeCapacity uid=%s actiefVak=%d isExt=%s fillType=%s free=%.0f",
         tostring(uid), data.activeSlot, tostring(active.isExtension),
@@ -180,6 +194,9 @@ Storage.setFillLevel = function(self, fillLevel, fillType, fillInfo)
     local delta = fillLevel - virtualCurrent
 
     if delta > 0.0001 then
+        RealSiloDebug.print(
+            "[realSilo][DIAG] storten uid=%s ft=%s gevraagd=%.0f boekTotaal=%.0f delta=%.0f actiefVak=%d",
+            tostring(uid), tostring(fillType), fillLevel, bookTotal, delta, data.activeSlot)
         -- Bypass: boekhouding klopt al → Giants laadt vanuit onze savegame
         if math.abs(bookTotal - fillLevel) < 0.5 then
             self._realSiloApplying = true

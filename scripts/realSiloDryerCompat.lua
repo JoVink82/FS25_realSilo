@@ -273,7 +273,17 @@ local function tryInstallDryerCompat()
     end
 
     local instance = g_currentMission and g_currentMission.dryingSystem
-    if instance == nil then return false end
+    if instance == nil then
+        -- MoistureSystem draait niet (bv. op een dedicated server zonder
+        -- die mod). Na een ruime marge stoppen met proberen, anders blijft
+        -- deze controle eindeloos doorlopen en het log volschrijven --
+        -- gemeten: 15.000+ pogingen op een server zonder MoistureSystem.
+        if _dryerCompatAttempts > 3000 then
+            _dryerCompatDone = true
+            RealSiloDebug.print("[realSilo][DIAG] realSiloDryerCompat: MoistureSystem niet aanwezig, gestopt met proberen")
+        end
+        return false
+    end
 
     local ok1 = installOwnedDryablesSplit(instance)
     local ok2 = installGetPlaceableByUniqueIdPatch(instance)
