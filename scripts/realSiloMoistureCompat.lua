@@ -251,7 +251,12 @@ local function installUnloadMoistureHook()
         local parentDeposit = RealSiloMoistureCompat.activeDeposit
         local deposit = {
             sourceInfo = sourceInfo,
-            fillType = fillTypeIndex
+            fillType = fillTypeIndex,
+            -- De los-trigger kent de werkelijk aangeboden hoeveelheid.
+            -- Storage.setFillLevel kan die niet betrouwbaar afleiden uit een
+            -- absoluut niveau wanneer meerdere virtuele vakken dezelfde
+            -- fysieke Storage delen.
+            remainingAmount = math.max(fillLevelDelta or 0, 0)
         }
         RealSiloMoistureCompat.activeDeposit = deposit
 
