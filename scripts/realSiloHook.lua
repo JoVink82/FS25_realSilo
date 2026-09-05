@@ -88,7 +88,13 @@ if Mission00 ~= nil and Mission00.onStartMission ~= nil then
 end
 
 local function realSiloEnsureGlobalEvent()
-    if realSiloGlobalEventId ~= nil then return end
+    if realSiloGlobalEventId ~= nil then
+        -- Hetzelfde event gedurende de hele missie hergebruiken. Herhaald
+        -- verwijderen en opnieuw registreren kan een zichtbare maar niet
+        -- meer reagerende F1-actie achterlaten.
+        pcall(function() g_inputBinding:setActionEventActive(realSiloGlobalEventId, true) end)
+        return
+    end
     if g_inputBinding == nil or InputAction.REALSILO_OPEN == nil then return end
 
     local _, eventId = g_inputBinding:registerActionEvent(
@@ -104,16 +110,13 @@ local function realSiloEnsureGlobalEvent()
     RealSiloDebug.print("[realSilo][DIAG] open-toets event geregistreerd: id=%s", tostring(eventId))
 end
 
--- Event volledig verwijderen zodra de speler geen enkele silo-trigger
--- meer in staat. Cruciaal: de actie staat op R met isSink="true", dus
--- zolang het event bestaat slikt RealSilo die toets. Bleef het event
--- bestaan, dan werkte R nergens anders meer (bv. de hogedrukspuit).
--- Door hem weg te halen bij het verlaten van de silo is R buiten de
--- silo weer gewoon vrij voor het spel en andere mods.
+-- Buiten alle silo-triggers blijft het ene event bestaan, maar wordt het
+-- gedeactiveerd en verborgen. Daardoor slikt het geen toets en kan dezelfde
+-- geldige registratie bij een volgende onEnter weer worden gebruikt.
 local function realSiloRemoveGlobalEvent()
     if realSiloGlobalEventId ~= nil and g_inputBinding ~= nil then
-        pcall(function() g_inputBinding:removeActionEvent(realSiloGlobalEventId) end)
-        realSiloGlobalEventId = nil
+        pcall(function() g_inputBinding:setActionEventTextVisibility(realSiloGlobalEventId, false) end)
+        pcall(function() g_inputBinding:setActionEventActive(realSiloGlobalEventId, false) end)
     end
 end
 
@@ -819,10 +822,12 @@ PlaceableSilo.onPlayerActionTriggerCallback = function(self, triggerId, otherId,
     if not self.realSiloActivatable then return end
     if not (g_localPlayer and otherId == g_localPlayer.rootNode) then return end
     if self:getOwnerFarmId() ~= g_currentMission:getFarmId() then return end
-    if onEnter or onStay then
-        realSiloRegisterInProximity(self, triggerId, onEnter)
-    elseif onLeave then
+    -- onLeave heeft voorrang: sommige triggerimplementaties leveren in de
+    -- overgangsframe zowel onStay als onLeave aan.
+    if onLeave then
         realSiloOnLeave(self, triggerId)
+    elseif onEnter or onStay then
+        realSiloRegisterInProximity(self, triggerId, onEnter)
     end
 end
 
@@ -844,10 +849,10 @@ PlaceableInfoTrigger.onInfoTriggerCallback = function(self, triggerId, otherId, 
     if not self.realSiloActivatable then return end
     if not (g_localPlayer and otherId == g_localPlayer.rootNode) then return end
     if self:getOwnerFarmId() ~= g_currentMission:getFarmId() then return end
-    if onEnter or onStay then
-        realSiloRegisterInProximity(self, triggerId, onEnter)
-    elseif onLeave then
+    if onLeave then
         realSiloOnLeave(self, triggerId)
+    elseif onEnter or onStay then
+        realSiloRegisterInProximity(self, triggerId, onEnter)
     end
 end
 
