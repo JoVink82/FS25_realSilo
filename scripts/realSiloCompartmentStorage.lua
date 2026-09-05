@@ -543,6 +543,9 @@ function RealSiloCompartmentStorage.seedMoistureFromMoistureSystem(uid, slotInde
     local ms = g_currentMission and g_currentMission.MoistureSystem
     if not ms then return false end
 
+    if RealSiloMoistureCompat ~= nil and RealSiloMoistureCompat.getMoistureOwner ~= nil then
+        placeable = RealSiloMoistureCompat.getMoistureOwner(placeable, uid)
+    end
     local ok, info = pcall(function() return ms:getObjectInfo(placeable.uniqueId, slot.fillType) end)
     if not ok or info == nil or info.moisture == nil then return false end
 
@@ -590,6 +593,9 @@ function RealSiloCompartmentStorage.getEffectiveMoistureInfo(placeable, slot, ui
         return { moisture = slot.moisture, quality = slot.quality }
     end
     local ms = g_currentMission and g_currentMission.MoistureSystem
+    if RealSiloMoistureCompat ~= nil and RealSiloMoistureCompat.getMoistureOwner ~= nil then
+        placeable = RealSiloMoistureCompat.getMoistureOwner(placeable, uid)
+    end
     if not ms or not placeable or not placeable.uniqueId then return nil end
     local ok, info = pcall(function() return ms:getObjectInfo(placeable.uniqueId, slot.fillType) end)
     if ok and info ~= nil and info.moisture ~= nil then
