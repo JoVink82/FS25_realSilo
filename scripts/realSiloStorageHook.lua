@@ -170,7 +170,19 @@ Storage.setFillLevel = function(self, fillLevel, fillType, fillInfo)
     -- 1.000 l in een leeg actief vak gestort; de oude berekening maakte daar
     -- ten onrechte 1.700 l van.
     local realCurrentBefore = originalGetFillLevel(self, fillType)
-    local delta = fillLevel - realCurrentBefore
+    local activeDeposit = RealSiloMoistureCompat and RealSiloMoistureCompat.activeDeposit
+    local isTriggerDeposit = activeDeposit ~= nil
+        and activeDeposit.fillType == fillType
+        and (activeDeposit.remainingAmount or 0) > 0
+    local delta
+    if isTriggerDeposit then
+        -- Gebruik bij lossen de delta die UnloadTrigger zelf doorgaf. Dit
+        -- werkt zowel na wisselen van een vol vak naar een leeg vak als bij
+        -- bestaande inhoud van hetzelfde product in andere vakken.
+        delta = activeDeposit.remainingAmount
+    else
+        delta = fillLevel - realCurrentBefore
+    end
 
     -- Geen epsilon gebruiken voor live storage-mutaties. GIANTS laat een
     -- FillUnit pas exact leeglopen wanneer ook de laatste fractie liter is
@@ -197,6 +209,9 @@ Storage.setFillLevel = function(self, fillLevel, fillType, fillInfo)
 
         local oldActiveLevel = active.fillLevel
         active.fillLevel = active.fillLevel + added
+        if isTriggerDeposit then
+            activeDeposit.remainingAmount = math.max(activeDeposit.remainingAmount - added, 0)
+        end
         if active.fillType == 0 then active.fillType = fillType end
 
         if RealSiloMoistureCompat ~= nil
