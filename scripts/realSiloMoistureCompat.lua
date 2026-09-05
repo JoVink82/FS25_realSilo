@@ -53,6 +53,7 @@
 -- ============================================================
 
 RealSiloMoistureCompat = {}
+RealSiloMoistureCompat.pendingSlotSync = {}
 
 -- ----------------------------------------------------------------
 -- Vind de realSilo-uid die bij een storage hoort (hoofdsilo of
@@ -236,49 +237,87 @@ local function installUnloadMoistureHook()
     UnloadTrigger.addFillUnitFillLevel = function(self, farmId, fillUnitIndex,
             fillLevelDelta, fillTypeIndex, toolType, fillPositionData, extraAttributes)
         local ms = g_currentMission and g_currentMission.MoistureSystem
+        local sourceObject = fillPositionData and fillPositionData.sourceObject
         local sourceId = fillPositionData and fillPositionData.sourceUniqueId
+        if sourceId == nil and sourceObject ~= nil then
+            sourceId = sourceObject.uniqueId
+        end
         local sourceInfo = nil
         if ms ~= nil and sourceId ~= nil then
             local ok, info = pcall(ms.getObjectInfo, ms, sourceId, fillTypeIndex)
             if ok then sourceInfo = info end
         end
 
-        local targetPlaceable = self.target and self.target.owningPlaceable
-        local uid = findSiloUidForObject(targetPlaceable)
-        local data = uid and RealSiloCompartmentStorage.siloSlots[uid]
-        local slot = data and data.slots[data.activeSlot]
-        local oldLevel = slot and slot.fillLevel or 0
+        local parentDeposit = RealSiloMoistureCompat.activeDeposit
+        local deposit = {
+            sourceInfo = sourceInfo,
+            fillType = fillTypeIndex
+        }
+        RealSiloMoistureCompat.activeDeposit = deposit
 
         local applied = originalAddFillUnitFillLevel(self, farmId, fillUnitIndex,
             fillLevelDelta, fillTypeIndex, toolType, fillPositionData, extraAttributes)
 
-        if sourceInfo ~= nil and sourceInfo.moisture ~= nil and slot ~= nil
-                and slot.fillType == fillTypeIndex and slot.fillLevel > oldLevel then
-            local added = slot.fillLevel - oldLevel
-            local newLevel = slot.fillLevel
-            if oldLevel <= 0 or slot.moisture == nil then
-                slot.moisture = sourceInfo.moisture
-                slot.quality = sourceInfo.quality
-            else
-                slot.moisture = ((oldLevel * slot.moisture)
-                    + (added * sourceInfo.moisture)) / newLevel
-                local oldQuality = slot.quality or sourceInfo.quality or 100
-                local sourceQuality = sourceInfo.quality or oldQuality
-                slot.quality = ((oldLevel * oldQuality)
-                    + (added * sourceQuality)) / newLevel
-            end
-
-            local owner = getMoistureOwner(targetPlaceable, uid)
+        RealSiloMoistureCompat.activeDeposit = parentDeposit
+        if deposit.uid ~= nil and deposit.slot ~= nil and ms ~= nil then
+            local data = RealSiloCompartmentStorage.siloSlots[deposit.uid]
+            local owner = getMoistureOwner(data and data.placeable, deposit.uid)
             if owner ~= nil and owner.uniqueId ~= nil and ms.setObjectInfo ~= nil then
                 pcall(ms.setObjectInfo, ms, owner.uniqueId, fillTypeIndex, {
-                    moisture = slot.moisture,
-                    quality = slot.quality
+                    moisture = deposit.slot.moisture,
+                    quality = deposit.slot.quality
                 })
             end
         end
         return applied
     end
 end
+
+-- Wordt vanuit de Storage-hook aangeroepen terwijl exact bekend is welk vak
+-- de liters heeft ontvangen. Meng vocht en kwaliteit volumegewogen binnen dat
+-- vak; raak geen enkel ander compartiment aan.
+function RealSiloMoistureCompat.recordStorageDeposit(uid, slot, fillType, oldLevel, added)
+    local deposit = RealSiloMoistureCompat.activeDeposit
+    local sourceInfo = deposit and deposit.sourceInfo
+    if deposit == nil or deposit.fillType ~= fillType or sourceInfo == nil
+            or sourceInfo.moisture == nil or added <= 0 then
+        return
+    end
+
+    if oldLevel <= 0 or slot.moisture == nil then
+        slot.moisture = sourceInfo.moisture
+        slot.quality = sourceInfo.quality
+    else
+        local newLevel = oldLevel + added
+        slot.moisture = ((oldLevel * slot.moisture)
+            + (added * sourceInfo.moisture)) / newLevel
+        local oldQuality = slot.quality or sourceInfo.quality or 100
+        local sourceQuality = sourceInfo.quality or oldQuality
+        slot.quality = ((oldLevel * oldQuality)
+            + (added * sourceQuality)) / newLevel
+    end
+
+    deposit.uid = uid
+    deposit.slot = slot
+    if g_server ~= nil then
+        local now = g_currentMission and g_currentMission.time or 0
+        RealSiloMoistureCompat.pendingSlotSync[uid] = now + 250
+    end
+end
+
+-- Verstuur vocht/kwaliteit eenmaal kort nadat een storting klaar is, niet
+-- iedere lossingsframe. Daardoor zien clients op een dedicated server exact
+-- dezelfde per-vakwaarden als de server zonder onnodig netwerkverkeer.
+FSBaseMission.update = Utils.appendedFunction(FSBaseMission.update, function()
+    if g_server == nil or RealSiloEvents == nil then return end
+    local now = g_currentMission and g_currentMission.time or 0
+    for uid, dueAt in pairs(RealSiloMoistureCompat.pendingSlotSync) do
+        if now >= dueAt then
+            RealSiloMoistureCompat.pendingSlotSync[uid] = nil
+            RealSiloEvents.broadcastSlotSync(uid)
+        end
+    end
+end)
 
 -- ----------------------------------------------------------------
 -- UI: vakkenlijst in RealSiloDialog (T-menu overzicht). Wrap
