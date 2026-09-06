@@ -874,3 +874,70 @@ function RealSiloEvents.broadcastSlotSync(uid)
     if not slots then return end
     g_server:broadcastEvent(RealSiloSlotSyncEvent.new(uid, slots, true), true, nil, nil)
 end
+
+-- Een virtueel RealSilo-vak heeft geen NetworkUtil-objectId. Daarom kan
+-- MoistureSystem's eigen DryingToggleEvent een keuze vanaf een dedicated
+-- client niet versturen. Dit event gebruikt de stabiele silo-uid + vakindex.
+RealSiloDryerToggleEvent = {}
+local RealSiloDryerToggleEvent_mt = Class(RealSiloDryerToggleEvent, Event)
+InitEventClass(RealSiloDryerToggleEvent, "RealSiloDryerToggleEvent")
+
+function RealSiloDryerToggleEvent.emptyNew()
+    return Event.new(RealSiloDryerToggleEvent_mt)
+end
+
+
+function RealSiloDryerToggleEvent.new(uid, slotIndex, newState)
+    local self = RealSiloDryerToggleEvent.emptyNew()
+    self.uid = uid
+    self.slotIndex = slotIndex
+    self.newState = newState
+    return self
+end
+
+
+function RealSiloDryerToggleEvent:writeStream(streamId, connection)
+    streamWriteString(streamId, self.uid)
+    streamWriteUIntN(streamId, self.slotIndex, 6)
+    streamWriteBool(streamId, self.newState ~= nil)
+    if self.newState ~= nil then streamWriteBool(streamId, self.newState) end
+end
+
+
+function RealSiloDryerToggleEvent:readStream(streamId, connection)
+    self.uid = streamReadString(streamId)
+    self.slotIndex = streamReadUIntN(streamId, 6)
+    if streamReadBool(streamId) then self.newState = streamReadBool(streamId) end
+    self:run(connection)
+end
+
+
+function RealSiloDryerToggleEvent:run(connection)
+    local dryingSystem = g_currentMission and g_currentMission.dryingSystem
+    if dryingSystem == nil or RealSiloDryerCompat == nil then return end
+
+    local virtualId = RealSiloDryerCompat.buildVirtualId(self.uid, self.slotIndex)
+    if g_server ~= nil and self.newState == nil then
+        local proxy = RealSiloDryerCompat.buildProxyPlaceable(self.uid, self.slotIndex)
+        if proxy == nil then return end
+        dryingSystem:toggleDrying(proxy)
+        local isDrying = dryingSystem:isDrying(virtualId)
+        RealSiloDebug.print("[realSilo] Dedicated droger-toggle: uid=%s vak=%d actief=%s",
+            tostring(self.uid), self.slotIndex, tostring(isDrying))
+        g_server:broadcastEvent(
+            RealSiloDryerToggleEvent.new(self.uid, self.slotIndex, isDrying), false, nil, nil)
+    elseif g_server == nil and self.newState ~= nil then
+        dryingSystem:setDryingState(virtualId, self.newState)
+        if RealSiloDryerCompat.refreshDryingGui ~= nil then
+            RealSiloDryerCompat.refreshDryingGui()
+        end
+    end
+end
+
+
+function RealSiloEvents.sendDryerToggle(uid, slotIndex)
+    if g_client == nil or g_client:getServerConnection() == nil then return false end
+    g_client:getServerConnection():sendEvent(
+        RealSiloDryerToggleEvent.new(uid, slotIndex, nil))
+    return true
+end
