@@ -1,3 +1,7 @@
+!!!WARNING!!!! this is in devlopment make a backup from you save before you test it
+
+- New per-silo setting in the settings menu: "Allow drying for this silo". Turn it off for a silo that should never offer grain drying, and it disappears entirely from FS25_MoistureSystem's Grain Drying menu. Only an admin can change it, and the setting is saved and synced to all players. Existing silos default to allowed, so nothing changes until you turn it off.
+
 - fixed the naming not corectly shown every where
 - if you speed up the time the transfer speeds up to
 - fixed ESC/Cancel not working during the first-time silo configuration (you can now cancel out of it)
