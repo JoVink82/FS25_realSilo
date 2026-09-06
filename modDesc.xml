@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8" standalone="no"?>
 <modDesc descVersion="111">
     <author>Jo_Vink</author>
-    <version>1.2.0.3</version>
+    <version>1.2.0.4</version>
     <title>
         <en>RealSilo – Realistic Silo Compartments</en>
         <nl>RealSilo – Realistische Silo Compartimenten</nl>
@@ -19,6 +19,22 @@ How it works:
 - In multiplayer only the admin (logged in via the multiplayer menu) can change the silo settings. Other players can use the silo normally and view the compartment overview.
 
 Please report problems on GitHub: https://github.com/JoVink82/FS25_realSilo
+
+Changelog 1.2.0.4:
+- The start/stop drying button in FS25_MoistureSystem's Grain Drying menu now also works for players connected to a dedicated server as a client, not only for the host.
+- The moisture percentage shown for a compartment in the Grain Drying menu no longer stays frozen for connected players while it is actively drying; it now updates as the crop actually dries.
+- Fixed trailer unloading so the final fractional amount is processed and the tipping animation can stop when the trailer is empty.
+- Silo configuration and compartment distribution are now handled authoritatively by the server, preventing duplicate processing in multiplayer and on dedicated servers.
+- The menu prompt is now controlled by the actual silo trigger shape instead of an estimated distance, and selling/buying stations are no longer detected as farm silos.
+- Restored compatibility with FS25_MoistureSystem 2.0.0.6: moisture and grain classification are retained per compartment and shown in the RealSilo menu, including extension compartments.
+- Fixed a serious fill-level error where opening a menu while unloading could repeatedly add the silo's existing physical total to the active compartment.
+- The F1 menu action now follows the actual trigger heartbeat and disappears reliably after leaving the silo area.
+- Moisture and quality are stored independently per compartment. Additional grain in the same compartment is mixed using a volume-weighted average without changing other compartments.
+- Fixed overfilling after changing a compartment capacity: existing grain in other compartments is no longer counted again when unloading into the active compartment.
+- Fixed the RealSilo key becoming stuck in the F1 menu or no longer opening the menu after leaving and re-entering a trigger.
+- Trigger registrations now remain valid until the engine sends the real onLeave event, including info triggers without continuous onStay callbacks.
+- Unloading into another selected compartment now uses the amount supplied by the unload trigger, so grain can be unloaded after a different compartment became full without duplicating existing contents.
+- Existing filled compartments without legacy MoistureSystem metadata now receive valid default properties so they can be selected and started in the Grain Drying menu.
 
 Changelog 1.2.0.3:
 - The open key no longer blocks other actions on the same key. The default key is now K instead of R, because R is the game's general "activate object" key (pressure washer, shops, doors). Existing players who already have it on R can change it under Options > Controls.
@@ -55,6 +71,22 @@ Hoe het werkt:
 
 Problemen graag melden op GitHub: https://github.com/JoVink82/FS25_realSilo
 
+Changelog v1.2.0.4:
+- De start/stop-knop voor drogen in het Grain Drying-menu van FS25_MoistureSystem werkt nu ook voor spelers die als client verbinden met een dedicated server, niet meer alleen voor de host.
+- Het vochtpercentage van een vak in het Grain Drying-menu blijft bij verbonden spelers niet langer hangen op de beginwaarde terwijl er gedroogd wordt; het wordt nu bijgewerkt zodra het gewas daadwerkelijk droogt.
+- Lossen van trailers verbeterd: ook de laatste fractie wordt verwerkt, zodat de kiepanimatie stopt wanneer de trailer leeg is.
+- Siloconfiguratie en vakverdeling worden nu leidend door de server verwerkt. Dit voorkomt dubbele verwerking in multiplayer en op dedicated servers.
+- De menumelding wordt nu bepaald door de daadwerkelijke trigger-vorm van de silo in plaats van een geschatte afstand. Verkoop- en koopstations worden niet langer als boerderijsilo herkend.
+- Compatibiliteit met FS25_MoistureSystem 2.0.0.6 hersteld: vocht en graanclassificatie blijven per vak behouden en worden in het RealSilo-menu getoond, ook bij extension-vakken.
+- Ernstige inhoudsfout opgelost waarbij het openen van een menu tijdens het lossen het bestaande fysieke silototaal iedere frame opnieuw aan het actieve vak kon toevoegen.
+- De RealSilo-actie in het F1-menu volgt nu de heartbeat van de daadwerkelijke trigger en verdwijnt betrouwbaar na het verlaten van de silo.
+- Vocht en kwaliteit worden onafhankelijk per vak opgeslagen. Extra graan in hetzelfde vak wordt volumegewogen gemengd zonder andere vakken te wijzigen.
+- Overvullen na het wijzigen van een vakcapaciteit opgelost: bestaande inhoud uit andere vakken wordt niet meer opnieuw meegeteld bij het lossen in het actieve vak.
+- Opgelost dat de RealSilo-toets in het F1-menu kon blijven staan of het menu na opnieuw betreden van een trigger niet meer opende.
+- Triggerregistraties blijven nu geldig tot de engine de echte onLeave-melding verstuurt, ook bij info-triggers zonder doorlopende onStay-callbacks.
+- Lossen in een ander geselecteerd vak gebruikt nu de hoeveelheid van de lostrigger. Daardoor kan na een vol vak in een ander vak worden gelost zonder bestaande inhoud dubbel te tellen.
+- Bestaande gevulde vakken zonder oude MoistureSystem-gegevens krijgen geldige standaardeigenschappen, zodat de graandroger ervoor kan worden gestart.
+
 Changelog v1.2.0.3:
 - De open-toets blokkeert geen andere acties meer op dezelfde toets. De standaardtoets is nu K in plaats van R, omdat R in het spel de algemene "object activeren"-toets is (hogedrukspuit, winkels, deuren). Wie hem al op R had staan, kan dat aanpassen via Opties > Besturing.
 - Scriptfout opgelost bij het opslaan van een vakwijziging (capaciteit of naam); de wijziging wordt nu correct bewaard.
@@ -89,6 +121,22 @@ So funktioniert es:
 Bitte melden Sie Probleme unter GitHub: https://github.com/JoVink82/FS25_realSilo
 
 
+Changelog v1.2.0.4:
+- Die Start/Stopp-Trocknen-Schaltfläche im Grain Drying-Menü von FS25_MoistureSystem funktioniert jetzt auch für Spieler, die sich als Client mit einem Dedicated Server verbinden, nicht mehr nur für den Host.
+- Der im Grain Drying-Menü angezeigte Feuchtigkeitswert eines Fachs bleibt bei verbundenen Spielern nicht mehr auf dem Anfangswert stehen, während getrocknet wird; er wird jetzt aktualisiert, sobald das Getreide tatsächlich trocknet.
+- Das Entladen von Anhängern wurde verbessert: Auch die letzte Teilmenge wird verarbeitet, sodass die Kippanimation stoppt, wenn der Anhänger leer ist.
+- Silokonfiguration und Fachverteilung werden nun verbindlich vom Server verarbeitet. Dadurch wird eine doppelte Verarbeitung im Multiplayer und auf Dedicated Servern verhindert.
+- Der Menühinweis richtet sich jetzt nach der tatsächlichen Triggerform des Silos statt nach einer geschätzten Entfernung. Verkaufs- und Kaufstationen werden nicht mehr als Hofsilos erkannt.
+- Kompatibilität mit FS25_MoistureSystem 2.0.0.6 wiederhergestellt: Feuchtigkeit und Getreideklassifizierung bleiben je Fach erhalten und werden im RealSilo-Menü angezeigt, auch bei Erweiterungsfächern.
+- Schwerwiegenden Füllstandsfehler behoben, bei dem das Öffnen eines Menüs während des Entladens den vorhandenen physischen Silobestand in jedem Frame erneut zum aktiven Fach addieren konnte.
+- Die RealSilo-Aktion im F1-Menü folgt nun dem Heartbeat des tatsächlichen Triggers und verschwindet nach dem Verlassen des Silobereichs zuverlässig.
+- Feuchtigkeit und Qualität werden unabhängig je Fach gespeichert. Zusätzliches Getreide im selben Fach wird volumengewichtet gemischt, ohne andere Fächer zu verändern.
+- Überfüllung nach einer Änderung der Fachkapazität behoben: Vorhandenes Getreide aus anderen Fächern wird beim Entladen in das aktive Fach nicht erneut mitgezählt.
+- Behoben, dass die RealSilo-Taste im F1-Menü hängen bleiben oder das Menü nach erneutem Betreten eines Triggers nicht mehr öffnen konnte.
+- Triggerregistrierungen bleiben jetzt bis zum tatsächlichen onLeave-Ereignis der Engine gültig, auch bei Info-Triggern ohne fortlaufende onStay-Aufrufe.
+- Beim Entladen in ein anderes ausgewähltes Fach wird jetzt die vom Entladetrigger gelieferte Menge verwendet. So kann nach einem vollen Fach in ein anderes Fach entladen werden, ohne vorhandenen Inhalt doppelt zu zählen.
+- Bereits gefüllte Fächer ohne ältere MoistureSystem-Daten erhalten gültige Standardeigenschaften, damit der Getreidetrockner dafür gestartet werden kann.
+
 Changelog v1.2.0.3:
 - Die Offnen-Taste blockiert keine anderen Aktionen auf derselben Taste mehr. Die Standardtaste ist jetzt K statt R, da R im Spiel die allgemeine "Objekt aktivieren"-Taste ist (Hochdruckreiniger, Laden, Turen). Wer sie bereits auf R hat, kann das unter Optionen > Steuerung andern.
 - Skriptfehler beim Speichern einer Fachanderung (Kapazitat oder Name) behoben; die Anderung wird jetzt korrekt gespeichert.
@@ -115,15 +163,17 @@ Changelog v1.1.0.1:
     <iconFilename>icon_RealSilo.dds</iconFilename>
 
     <actions>
-        <!-- isSink="false": de toets wordt NIET opgeslokt. Stond dit op
-             true, dan blokkeerde RealSilo de toets voor het spel zelf
-             (gemeld: hogedrukspuit niet meer op te pakken).
-             Standaard KEY_k in plaats van KEY_r, omdat R in FS25 de
-             algemene "object activeren"-toets is (hogedrukspuit, winkels,
-             deuren). Wie R toch wil, kan dat instellen via
-             Opties > Besturing. -->
-        <action name="REALSILO_OPEN" axisType="HALF_POSITIVE_AXIS" triggerAlways="false" isSink="false"/>
-        <action name="REALSILO_TRANSFER" axisType="HALF_POSITIVE_AXIS" triggerAlways="false" isSink="false"/>
+        <!-- Standaardtoets KEY_k, niet KEY_r. R is in FS25 de algemene
+             toets voor "object activeren" (hogedrukspuit, winkels,
+             deuren). Toen deze actie op R stond, blokkeerde RealSilo die
+             toets voor het spel zelf; gemeld als "hogedrukspuit niet meer
+             op te pakken".
+             isSink blijft true: de actie moet de toets toegewezen krijgen,
+             anders vuurt de callback niet en gaat het menu niet open. Met
+             K als toets is er geen botsing meer met het spel, dus is dit
+             nu veilig. De toets is aanpasbaar via Opties, Besturing. -->
+        <action name="REALSILO_OPEN" axisType="HALF_POSITIVE_AXIS" triggerAlways="false" isSink="true"/>
+        <action name="REALSILO_TRANSFER" axisType="HALF_POSITIVE_AXIS" triggerAlways="false" isSink="true"/>
     </actions>
     <inputBinding>
         <actionBinding action="REALSILO_OPEN">

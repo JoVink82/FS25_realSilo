@@ -93,9 +93,28 @@ function RealSiloUtil.isFarmSiloStorage(storage)
 end
 
 -- Minstens één van de storages van deze PlaceableSilo moet farmSilo zijn.
+-- Verkoop-/koopstations uitsluiten.
+--
+-- Sommige verkooppunten (bv. de graanelevator op de basiskaart,
+-- data/placeables/mapUS/sellingPoints/grainElevatorTriggers.xml) hebben
+-- ook een silo-spec met FARMSILO-producten. Die werden daardoor als
+-- boerderijsilo geregistreerd en door de mod beheerd, terwijl het
+-- verkooppunten zijn die de speler niet bezit. Dat hoort niet: de mod
+-- beheert alleen silo's van de boerderij.
+local function isSellingOrBuyingStation(placeable)
+    if placeable == nil then return false end
+    if placeable.spec_sellingStation ~= nil then return true end
+    if placeable.spec_buyingStation  ~= nil then return true end
+    return false
+end
+
 function RealSiloUtil.isFarmSiloPlaceableSilo(placeable)
     local spec = placeable and placeable.spec_silo
     if not spec or not spec.storages then return false end
+    if isSellingOrBuyingStation(placeable) then
+        RealSiloDebug.print("[realSilo] Silo genegeerd: is een verkoop-/koopstation")
+        return false
+    end
     for _, storage in ipairs(spec.storages) do
         if RealSiloUtil.isFarmSiloStorage(storage) then
             return true
@@ -213,5 +232,47 @@ function RealSiloUtil.canManageSiloLocal(uid)
     end)
 
     if not ok then return true end
+    return allowed
+end
+
+-- ----------------------------------------------------------------
+-- Server-side check voor het starten/stoppen van de graandroger op
+-- een vak (via realSiloDryerCompat.lua / RealSiloDryerToggleEvent).
+--
+-- Dit is GEEN instellingen-wijziging zoals canManageSilo hierboven --
+-- gewoon dagelijks gebruik van de silo. FS25_MoistureSystem's eigen
+-- DryingSystem:getOwnedDryables(farmId) staat dit toe aan om het even
+-- welk lid van de boerderij die de silo bezit, zonder aparte
+-- rechtencheck (alleen gefilterd op farmId). Om hetzelfde gedrag te
+-- behouden nu realSilo dit voor zijn vak-proxy's zelf afhandelt (zie
+-- BEPERKING in realSiloDryerCompat.lua), controleren we hier dus op
+-- boerderij-lidmaatschap, niet op admin-rechten.
+--
+-- connection == nil betekent een lokale aanroep door de host zelf ->
+-- altijd toegestaan.
+-- ----------------------------------------------------------------
+function RealSiloUtil.canToggleSiloDryer(uid, connection)
+    if connection == nil then return true end
+
+    local ok, allowed = pcall(function()
+        local user = g_currentMission.userManager:getUserByConnection(connection)
+        if user and user.getIsMasterUser and user:getIsMasterUser() then
+            return true
+        end
+
+        local player = g_currentMission:getPlayerByConnection(connection)
+        local farmId = player and player.farmId
+        if farmId == nil then
+            return false
+        end
+
+        local ownerFarmId = RealSiloUtil.getFarmIdForUid(uid)
+        return ownerFarmId ~= nil and ownerFarmId == farmId
+    end)
+
+    if not ok then
+        RealSiloDebug.print("[realSilo] Droger-toestemmingscheck mislukte met fout, toegestaan (fail-open): " .. tostring(allowed))
+        return true
+    end
     return allowed
 end
