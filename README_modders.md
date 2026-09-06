@@ -200,12 +200,13 @@ entry in MoistureSystem's Grain Drying menu (Shift+M), named
 `<silo name> - Silo <N>`, each with an independent moisture/quality record.
 Compartments can be started/stopped drying independently from that menu.
 
-Known limitation: on a multiplayer client (not the host), starting/stopping
-drying from that menu for a realSilo compartment doesn't work, because
-MoistureSystem's client-side toggle relies on a network object id that these
-virtual per-compartment entries don't have. Viewing the list, moisture%,
-quality and ETA works fine for clients; only the host/server can toggle
-drying on realSilo compartments.
+Starting/stopping drying from that menu for a realSilo compartment, and the
+moisture% shown for it, now work correctly for every player — host or
+client, singleplayer or dedicated server. Earlier versions had a known
+limitation here (MoistureSystem's client-side toggle and its hourly
+moisture broadcast both rely on a network object id that these virtual
+per-compartment entries don't have), which realSilo now works around via
+its own multiplayer events.
 
 realSilo also shows moisture% and quality grade (A-D) per compartment in its
 own dialog and in the world infobox, and keeps each compartment's last-known
