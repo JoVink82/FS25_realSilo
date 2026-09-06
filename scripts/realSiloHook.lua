@@ -25,12 +25,18 @@ local modDirectory = g_currentModDirectory
 -- gedeelde "object activeren"-toets en botste met andere mods.
 -- ================================================================
 local realSiloActiveTriggerSilo = nil   -- silo waar de speler nu bij staat
-local realSiloEnteredSet        = {}    -- [placeable]=true: alle betreden silo's
+-- Een placeable kan zowel een playerActionTrigger als een infoTrigger
+-- hebben. Bewaar daarom iedere door de engine bewaakte trigger-vorm apart;
+-- één onLeave mag de andere, nog betreden vorm niet ongeldig maken.
+local realSiloEnteredSet        = {}    -- [placeable][triggerId]=true zolang onLeave niet is ontvangen
+local realSiloRegisteredPlayerRoot = nil
 local realSiloGlobalEventId     = nil
 
 local function realSiloUpdatePromptText()
     if realSiloGlobalEventId == nil or g_inputBinding == nil then return end
     local active = (realSiloActiveTriggerSilo ~= nil)
+    RealSiloDebug.print("[realSilo][DIAG] prompt zichtbaar=%s (event=%s)",
+        tostring(active), tostring(realSiloGlobalEventId))
     pcall(function() g_inputBinding:setActionEventTextVisibility(realSiloGlobalEventId, active) end)
     if active then
         pcall(function()
@@ -40,8 +46,55 @@ local function realSiloUpdatePromptText()
     end
 end
 
+-- Diagnose: welke toets is er aan REALSILO_OPEN gekoppeld? Als de
+-- binding leeg is, bestaat de actie wel maar heeft hij geen toets --
+-- dan verschijnt er geen prompt en reageert er niets. Dat is niet uit
+-- een serverlog af te leiden, vandaar deze melding bij mission-start.
+local function realSiloLogBinding()
+    if g_inputBinding == nil then
+        RealSiloDebug.print("[realSilo][DIAG] binding: g_inputBinding niet beschikbaar")
+        return
+    end
+    if InputAction.REALSILO_OPEN == nil then
+        RealSiloDebug.print("[realSilo][DIAG] binding: InputAction.REALSILO_OPEN BESTAAT NIET")
+        return
+    end
+
+    local shown = false
+    -- Meerdere API-varianten proberen; welke bestaat verschilt per versie.
+    for _, fn in ipairs({ "getDisplayKeyNamesForActionString",
+                          "getDisplayKeyNamesForAction",
+                          "getButtonsForActionName" }) do
+        if not shown and g_inputBinding[fn] ~= nil then
+            local ok, res = pcall(function()
+                return g_inputBinding[fn](g_inputBinding, InputAction.REALSILO_OPEN)
+            end)
+            if ok and res ~= nil and tostring(res) ~= "" then
+                RealSiloDebug.print("[realSilo][DIAG] binding REALSILO_OPEN (%s): %s",
+                    fn, tostring(res))
+                shown = true
+            end
+        end
+    end
+    if not shown then
+        RealSiloDebug.print("[realSilo][DIAG] binding REALSILO_OPEN: GEEN toets gevonden (actie bestaat wel)")
+    end
+end
+
+if Mission00 ~= nil and Mission00.onStartMission ~= nil then
+    Mission00.onStartMission = Utils.appendedFunction(Mission00.onStartMission, function()
+        realSiloLogBinding()
+    end)
+end
+
 local function realSiloEnsureGlobalEvent()
-    if realSiloGlobalEventId ~= nil then return end
+    if realSiloGlobalEventId ~= nil then
+        -- Hetzelfde event gedurende de hele missie hergebruiken. Herhaald
+        -- verwijderen en opnieuw registreren kan een zichtbare maar niet
+        -- meer reagerende F1-actie achterlaten.
+        pcall(function() g_inputBinding:setActionEventActive(realSiloGlobalEventId, true) end)
+        return
+    end
     if g_inputBinding == nil or InputAction.REALSILO_OPEN == nil then return end
 
     local _, eventId = g_inputBinding:registerActionEvent(
@@ -54,38 +107,34 @@ local function realSiloEnsureGlobalEvent()
         end,
         false, true, false, true)
     realSiloGlobalEventId = eventId
+    RealSiloDebug.print("[realSilo][DIAG] open-toets event geregistreerd: id=%s", tostring(eventId))
 end
 
--- Event volledig verwijderen zodra de speler geen enkele silo-trigger
--- meer in staat. Cruciaal: de actie staat op R met isSink="true", dus
--- zolang het event bestaat slikt RealSilo die toets. Bleef het event
--- bestaan, dan werkte R nergens anders meer (bv. de hogedrukspuit).
--- Door hem weg te halen bij het verlaten van de silo is R buiten de
--- silo weer gewoon vrij voor het spel en andere mods.
+-- Buiten alle silo-triggers blijft het ene event bestaan, maar wordt het
+-- gedeactiveerd en verborgen. Daardoor slikt het geen toets en kan dezelfde
+-- geldige registratie bij een volgende onEnter weer worden gebruikt.
 local function realSiloRemoveGlobalEvent()
     if realSiloGlobalEventId ~= nil and g_inputBinding ~= nil then
-        pcall(function() g_inputBinding:removeActionEvent(realSiloGlobalEventId) end)
-        realSiloGlobalEventId = nil
+        pcall(function() g_inputBinding:setActionEventTextVisibility(realSiloGlobalEventId, false) end)
+        pcall(function() g_inputBinding:setActionEventActive(realSiloGlobalEventId, false) end)
     end
 end
 
 -- ----------------------------------------------------------------
--- Vangnet: geef de open-toets ook vrij als de trigger nooit een
--- "verlaten"-melding stuurt.
+-- Vangnet zonder eigen afstandsschatting.
 --
--- Dat gebeurt bijvoorbeeld wanneer de speler vanuit de silo-trigger
--- direct in een voertuig stapt of wordt verplaatst: de trigger meldt
--- dan geen vertrek, de silo blijft als "actief" staan en de toets
--- blijft geclaimd. Omdat onze actie op R staat met isSink, werkt R
--- daarna nergens anders meer -- gemeld als "kan de hogedrukspuit niet
--- meer oppakken", pas na langere tijd spelen.
+-- De engine kent de werkelijke vorm, schaal en positie van iedere trigger
+-- en meldt die via triggerId/onEnter/onLeave. Een afstand tot het rootNode
+-- is daarvoor geen betrouwbare vervanging: bij een grote of verplaatste
+-- silohal kan het rootNode ver buiten de echte trigger liggen.
 --
--- Deze controle draait een paar keer per seconde en geeft de toets vrij
--- zodra de speler er niet meer (redelijk) dichtbij is.
+-- Normaal ruimt onLeave exact de betreffende trigger-vorm op. Dit vangnet
+-- grijpt alleen in als de geregistreerde silo of de lokale player-root niet
+-- meer bestaat/veranderd is, bijvoorbeeld bij verwijderen of opnieuw laden.
+-- Op een dedicated server bestaat g_localPlayer alleen op de client; de
+-- server registreert dus geen UI-action-event en hoeft niets te synchroniseren.
 -- ----------------------------------------------------------------
-local REALSILO_KEEP_DISTANCE = 15.0   -- meter
 local realSiloSafetyTimer = 0
-
 local function realSiloReleaseKeyIfPlayerGone(dt)
     if realSiloActiveTriggerSilo == nil then return end
 
@@ -93,49 +142,74 @@ local function realSiloReleaseKeyIfPlayerGone(dt)
     if realSiloSafetyTimer < 400 then return end
     realSiloSafetyTimer = 0
 
-    local release = false
-    local ok = pcall(function()
-        local p = realSiloActiveTriggerSilo
-        if p == nil or p.rootNode == nil or p.rootNode == 0
-           or p.realSiloUniqueId == nil then
-            release = true
-            return
-        end
-        if g_localPlayer == nil or g_localPlayer.rootNode == nil then
-            release = true
-            return
-        end
-        local px, py, pz = getWorldTranslation(g_localPlayer.rootNode)
-        local sx, sy, sz = getWorldTranslation(p.rootNode)
-        if MathUtil.vector3Length(px - sx, py - sy, pz - sz) > REALSILO_KEEP_DISTANCE then
-            release = true
-        end
-    end)
-    if not ok then release = true end
+    local p = realSiloActiveTriggerSilo
+    local playerRoot = g_localPlayer and g_localPlayer.rootNode or nil
+    local release = p == nil
+        or p.rootNode == nil
+        or p.rootNode == 0
+        or p.realSiloUniqueId == nil
+        or playerRoot == nil
+        or playerRoot == 0
+        or playerRoot ~= realSiloRegisteredPlayerRoot
+        or realSiloEnteredSet[p] == nil
 
     if release then
         realSiloEnteredSet = {}
         realSiloActiveTriggerSilo = nil
+        realSiloRegisteredPlayerRoot = nil
         realSiloRemoveGlobalEvent()
     end
 end
 
 -- Speler betreedt de trigger van een eigen silo.
-local function realSiloRegisterInProximity(self)
-    realSiloEnteredSet[self] = true
+local function realSiloRegisterInProximity(self, triggerId, isEnter)
+    if triggerId == nil then return end
+    if isEnter then
+        RealSiloDebug.print("[realSilo][DIAG] trigger BINNEN bij uid=%s triggerId=%s",
+            tostring(self.realSiloUniqueId), tostring(triggerId))
+    end
+    local triggers = realSiloEnteredSet[self]
+    if triggers == nil then
+        triggers = {}
+        realSiloEnteredSet[self] = triggers
+    end
+    local wasEntered = triggers[triggerId] ~= nil
+    local wasActive = realSiloActiveTriggerSilo == self
+    -- Niet alle GIANTS-infoTriggers sturen continu onStay. De registratie
+    -- blijft daarom geldig tot de bijbehorende echte onLeave-callback.
+    triggers[triggerId] = true
     realSiloActiveTriggerSilo = self
-    realSiloEnsureGlobalEvent()
-    realSiloUpdatePromptText()
+    realSiloRegisteredPlayerRoot = g_localPlayer and g_localPlayer.rootNode or nil
+    if not wasEntered or not wasActive then
+        realSiloEnsureGlobalEvent()
+        realSiloUpdatePromptText()
+    end
 end
 
--- Speler verlaat de trigger.
-local function realSiloOnLeave(self)
-    realSiloEnteredSet[self] = nil
+local function realSiloFindEnteredSilo()
+    for placeable, triggers in pairs(realSiloEnteredSet) do
+        if next(triggers) ~= nil then
+            return placeable
+        end
+    end
+    return nil
+end
+
+-- Speler verlaat precies de door de engine gemelde trigger-vorm.
+local function realSiloOnLeave(self, triggerId)
+    local triggers = realSiloEnteredSet[self]
+    if triggers ~= nil then
+        triggers[triggerId] = nil
+        if next(triggers) == nil then
+            realSiloEnteredSet[self] = nil
+        end
+    end
     if realSiloActiveTriggerSilo == self then
-        realSiloActiveTriggerSilo = next(realSiloEnteredSet) or nil
+        realSiloActiveTriggerSilo = realSiloFindEnteredSilo()
     end
     if realSiloActiveTriggerSilo == nil then
-        -- Geen silo meer in de buurt: R weer vrijgeven.
+        realSiloRegisteredPlayerRoot = nil
+        -- Geen echte silo-trigger meer betreden: toets weer vrijgeven.
         realSiloRemoveGlobalEvent()
     else
         realSiloUpdatePromptText()
@@ -146,9 +220,10 @@ end
 local function realSiloUnregisterFromProximity(self)
     realSiloEnteredSet[self] = nil
     if realSiloActiveTriggerSilo == self then
-        realSiloActiveTriggerSilo = next(realSiloEnteredSet) or nil
+        realSiloActiveTriggerSilo = realSiloFindEnteredSilo()
     end
     if realSiloActiveTriggerSilo == nil then
+        realSiloRegisteredPlayerRoot = nil
         realSiloRemoveGlobalEvent()
     else
         realSiloUpdatePromptText()
@@ -711,28 +786,57 @@ end
 -- spel en andere mods).
 -- ================================================================
 local originalPlayerTrigger = PlaceableSilo.onPlayerActionTriggerCallback
+RealSiloDebug.print("[realSilo][DIAG] hook-check: PlaceableSilo.onPlayerActionTriggerCallback bestaat=%s",
+    tostring(originalPlayerTrigger ~= nil))
 PlaceableSilo.onPlayerActionTriggerCallback = function(self, triggerId, otherId, onEnter, onLeave, onStay)
     originalPlayerTrigger(self, triggerId, otherId, onEnter, onLeave, onStay)
+    -- Diagnose: welke voorwaarde blokkeert? In een clientlog bleek deze
+    -- callback nooit tot registratie te komen (geen enkele "trigger BINNEN"),
+    -- waardoor de open-toets nooit werd aangemaakt.
+    if RealSiloDebug and RealSiloDebug.enabled then
+        RealSiloDebug.print(
+            "[realSilo][DIAG] playerTrigger: activatable=%s localPlayer=%s otherIdMatch=%s ownerFarm=%s spelerFarm=%s onEnter=%s",
+            tostring(self.realSiloActivatable ~= nil),
+            tostring(g_localPlayer ~= nil),
+            tostring(g_localPlayer ~= nil and otherId == g_localPlayer.rootNode),
+            tostring(self.getOwnerFarmId and self:getOwnerFarmId()),
+            tostring(g_currentMission and g_currentMission:getFarmId()),
+            tostring(onEnter))
+    end
     if not self.realSiloActivatable then return end
     if not (g_localPlayer and otherId == g_localPlayer.rootNode) then return end
     if self:getOwnerFarmId() ~= g_currentMission:getFarmId() then return end
-    if onEnter then
-        realSiloRegisterInProximity(self)
-    elseif onLeave then
-        realSiloOnLeave(self)
+    -- onLeave heeft voorrang: sommige triggerimplementaties leveren in de
+    -- overgangsframe zowel onStay als onLeave aan.
+    if onLeave then
+        realSiloOnLeave(self, triggerId)
+    elseif onEnter or onStay then
+        realSiloRegisterInProximity(self, triggerId, onEnter)
     end
 end
 
 local originalInfoTrigger = PlaceableInfoTrigger.onInfoTriggerCallback
+RealSiloDebug.print("[realSilo][DIAG] hook-check: PlaceableInfoTrigger.onInfoTriggerCallback bestaat=%s",
+    tostring(originalInfoTrigger ~= nil))
 PlaceableInfoTrigger.onInfoTriggerCallback = function(self, triggerId, otherId, onEnter, onLeave, onStay)
     originalInfoTrigger(self, triggerId, otherId, onEnter, onLeave, onStay)
+    if RealSiloDebug and RealSiloDebug.enabled then
+        RealSiloDebug.print(
+            "[realSilo][DIAG] infoTrigger: activatable=%s localPlayer=%s otherIdMatch=%s ownerFarm=%s spelerFarm=%s onEnter=%s",
+            tostring(self.realSiloActivatable ~= nil),
+            tostring(g_localPlayer ~= nil),
+            tostring(g_localPlayer ~= nil and otherId == g_localPlayer.rootNode),
+            tostring(self.getOwnerFarmId and self:getOwnerFarmId()),
+            tostring(g_currentMission and g_currentMission:getFarmId()),
+            tostring(onEnter))
+    end
     if not self.realSiloActivatable then return end
     if not (g_localPlayer and otherId == g_localPlayer.rootNode) then return end
     if self:getOwnerFarmId() ~= g_currentMission:getFarmId() then return end
-    if onEnter then
-        realSiloRegisterInProximity(self)
-    elseif onLeave then
-        realSiloOnLeave(self)
+    if onLeave then
+        realSiloOnLeave(self, triggerId)
+    elseif onEnter or onStay then
+        realSiloRegisterInProximity(self, triggerId, onEnter)
     end
 end
 
@@ -771,9 +875,8 @@ FSBaseMission.update = Utils.appendedFunction(FSBaseMission.update, function(sel
         realSiloManager.updateTransfers(dt)
     end
 
-    -- Vangnet: open-toets vrijgeven als de speler bij de silo weg is
-    -- zonder dat de trigger dat gemeld heeft (bv. ingestapt in een
-    -- voertuig). Zo blijft R niet onbedoeld geclaimd.
+    -- Vangnet voor een verdwenen/vervangen lokale speler of placeable.
+    -- Binnen/buiten wordt uitsluitend door de echte engine-triggers bepaald.
     realSiloReleaseKeyIfPlayerGone(dt)
 end)
 

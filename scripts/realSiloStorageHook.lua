@@ -35,28 +35,6 @@ RealSiloStorageHook.getRealFillLevel = function(storage, fillType)
 end
 
 -- ----------------------------------------------------------------
--- Menu-context: staat er een menuscherm open?
---
--- Tijdens het SPELEN moeten getFillLevel/getFillLevels alleen het
--- ACTIEVE vak rapporteren -- daar hangt het gericht laden/lossen per
--- compartiment van af (de LoadTrigger leidt hieruit af hoeveel er
--- beschikbaar is, en vraagt dus nooit meer dan er in het vak zit).
---
--- In een MENU (het financien-/prijzenoverzicht, statistieken) wil je
--- juist de totale voorraad van de silo zien, niet alleen het actieve
--- vak. Daarom rapporteren we daar het echte totaal.
---
--- Ons eigen RealSilo-menu leest rechtstreeks uit de boekhouding en
--- wordt hier dus niet door beinvloed.
--- ----------------------------------------------------------------
-local function isMenuOpen()
-    if g_gui == nil then return false end
-    local ok, visible = pcall(function() return g_gui:getIsGuiVisible() end)
-    return ok and visible == true
-end
-RealSiloStorageHook.isMenuOpen = isMenuOpen
-
--- ----------------------------------------------------------------
 -- getFillLevels (MEERVOUD): toont alleen het actieve vak aan
 -- laad-triggers zodat de "selecteer silo"-dialoog slechts één
 -- product tegelijk aanbiedt. Ongeconfigureerde silo's: pass-through.
@@ -66,10 +44,6 @@ if originalGetFillLevels ~= nil then
         local uid  = realSiloStorageLink[self]
         local data = uid and RealSiloCompartmentStorage.siloSlots[uid]
         if not data or not realSiloManager.isConfigured(uid) then
-            return originalGetFillLevels(self)
-        end
-        -- In een menu: echte totalen tonen (overzicht/prijzen).
-        if isMenuOpen() then
             return originalGetFillLevels(self)
         end
         local active = data.slots[data.activeSlot]
@@ -90,17 +64,15 @@ local function virtualFillLevel(data, self, fillType)
 end
 
 -- ----------------------------------------------------------------
--- getFillLevel: tijdens spelen alleen het actieve vak (nodig voor
--- gericht laden per compartiment); in een menu het echte totaal
--- (financien-/prijzenoverzicht toont zo de hele silo).
+-- getFillLevel: voor een geconfigureerde silo altijd alleen het actieve vak.
+-- Een algemene GUI-controle is hier onveilig: laad- en lostriggers blijven
+-- ook doorlopen terwijl een menu zichtbaar is. Het fysieke silototaal zou
+-- dan iedere frame opnieuw als stort-delta op het actieve vak terechtkomen.
 -- ----------------------------------------------------------------
 Storage.getFillLevel = function(self, fillType)
     local uid  = realSiloStorageLink[self]
     local data = uid and RealSiloCompartmentStorage.siloSlots[uid]
     if not data or not realSiloManager.isConfigured(uid) then
-        return originalGetFillLevel(self, fillType)
-    end
-    if isMenuOpen() then
         return originalGetFillLevel(self, fillType)
     end
     return virtualFillLevel(data, self, fillType)
@@ -122,12 +94,26 @@ Storage.getFreeCapacity = function(self, fillType)
         return originalGetFreeCapacity(self, fillType)
     end
     local active = data.slots[data.activeSlot]
-    if not active then return 0 end
-    if active.storage ~= self then return 0 end
+    if not active then
+        RealSiloDebug.print("[realSilo][DIAG] getFreeCapacity=0: geen actief vak (uid=%s slot=%s)",
+            tostring(uid), tostring(data.activeSlot))
+        return 0
+    end
+    if active.storage ~= self then
+        RealSiloDebug.print("[realSilo][DIAG] getFreeCapacity=0: actief vak %d hoort bij andere storage (uid=%s)",
+            data.activeSlot, tostring(uid))
+        return 0
+    end
     if active.fillType ~= 0 and fillType ~= nil and active.fillType ~= fillType then
+        RealSiloDebug.print("[realSilo][DIAG] getFreeCapacity=0: vak %d heeft ft=%s, gevraagd ft=%s (uid=%s)",
+            data.activeSlot, tostring(active.fillType), tostring(fillType), tostring(uid))
         return 0
     end
     local free = math.max(active.capacity - active.fillLevel, 0)
+    if free <= 0 then
+        RealSiloDebug.print("[realSilo][DIAG] getFreeCapacity=0: vak %d vol (%.0f/%.0f, uid=%s)",
+            data.activeSlot, active.fillLevel, active.capacity, tostring(uid))
+    end
     RealSiloDebug.print(
         "[realSilo] getFreeCapacity uid=%s actiefVak=%d isExt=%s fillType=%s free=%.0f",
         tostring(uid), data.activeSlot, tostring(active.isExtension),
@@ -176,18 +162,36 @@ Storage.setFillLevel = function(self, fillLevel, fillType, fillInfo)
         end
     end
 
-    local virtualCurrent = virtualFillLevel(data, self, fillType)
-    local delta = fillLevel - virtualCurrent
+    -- setFillLevel ontvangt van GIANTS een ABSOLUUT niveau van de echte
+    -- Storage, niet van ons virtuele actieve vak. Trek daarom ook het echte
+    -- niveau af. Met het virtuele vakniveau als basis werd de inhoud van
+    -- andere vakken van hetzelfde product nogmaals als storting gezien.
+    -- Voorbeeld: er staat fysiek al 700 l tarwe in een ander vak en er wordt
+    -- 1.000 l in een leeg actief vak gestort; de oude berekening maakte daar
+    -- ten onrechte 1.700 l van.
+    local realCurrentBefore = originalGetFillLevel(self, fillType)
+    local activeDeposit = RealSiloMoistureCompat and RealSiloMoistureCompat.activeDeposit
+    local isTriggerDeposit = activeDeposit ~= nil
+        and activeDeposit.fillType == fillType
+        and (activeDeposit.remainingAmount or 0) > 0
+    local delta
+    if isTriggerDeposit then
+        -- Gebruik bij lossen de delta die UnloadTrigger zelf doorgaf. Dit
+        -- werkt zowel na wisselen van een vol vak naar een leeg vak als bij
+        -- bestaande inhoud van hetzelfde product in andere vakken.
+        delta = activeDeposit.remainingAmount
+    else
+        delta = fillLevel - realCurrentBefore
+    end
 
-    if delta > 0.0001 then
-        -- Bypass: boekhouding klopt al → Giants laadt vanuit onze savegame
-        if math.abs(bookTotal - fillLevel) < 0.5 then
-            self._realSiloApplying = true
-            originalSetFillLevel(self, fillLevel, fillType, fillInfo)
-            self._realSiloApplying = false
-            return
-        end
-
+    -- Geen epsilon gebruiken voor live storage-mutaties. GIANTS laat een
+    -- FillUnit pas exact leeglopen wanneer ook de laatste fractie liter is
+    -- toegepast; als wij die fractie negeren blijft de discharge-state aan
+    -- en blijft een trailer in de kiepstand staan.
+    if delta > 0 then
+        RealSiloDebug.print(
+            "[realSilo][DIAG] storten uid=%s ft=%s gevraagd=%.0f boekTotaal=%.0f delta=%.0f actiefVak=%d",
+            tostring(uid), tostring(fillType), fillLevel, bookTotal, delta, data.activeSlot)
         -- Storten gebeurt UITSLUITEND in het actieve vak. Als de
         -- aangesproken storage niet de storage van het actieve vak is,
         -- doen we niets — getFreeCapacity gaf voor die storage ook al 0,
@@ -203,25 +207,34 @@ Storage.setFillLevel = function(self, fillLevel, fillType, fillInfo)
         local added = math.min(delta, room)
         if added <= 0 then return end
 
+        local oldActiveLevel = active.fillLevel
         active.fillLevel = active.fillLevel + added
+        if isTriggerDeposit then
+            activeDeposit.remainingAmount = math.max(activeDeposit.remainingAmount - added, 0)
+        end
         if active.fillType == 0 then active.fillType = fillType end
 
-        local realCurrent = originalGetFillLevel(self, fillType)
+        if RealSiloMoistureCompat ~= nil
+                and RealSiloMoistureCompat.recordStorageDeposit ~= nil then
+            RealSiloMoistureCompat.recordStorageDeposit(
+                uid, active, fillType, oldActiveLevel, added)
+        end
+
         self._realSiloApplying = true
-        originalSetFillLevel(self, realCurrent + added, fillType, fillInfo)
+        originalSetFillLevel(self, realCurrentBefore + added, fillType, fillInfo)
         self._realSiloApplying = false
 
-    elseif delta < -0.0001 then
+    elseif delta < 0 then
         local toRemove    = -delta
         local totalDrained = 0
         local active       = data.slots[data.activeSlot]
 
         local function drain(slot)
-            if toRemove <= 0.0001 then return end
+            if toRemove <= 0 then return end
             if slot.storage == self and slot.fillType == fillType and slot.fillLevel > 0 then
                 local removed = math.min(toRemove, slot.fillLevel)
                 slot.fillLevel = slot.fillLevel - removed
-                if slot.fillLevel <= 0.0001 then slot.fillLevel = 0; slot.fillType = 0 end
+                if slot.fillLevel <= 0.00001 then slot.fillLevel = 0; slot.fillType = 0 end
                 toRemove     = toRemove - removed
                 totalDrained = totalDrained + removed
             end
@@ -230,9 +243,8 @@ Storage.setFillLevel = function(self, fillLevel, fillType, fillInfo)
         if active then drain(active) end
 
         if totalDrained > 0 then
-            local realCurrent = originalGetFillLevel(self, fillType)
             self._realSiloApplying = true
-            originalSetFillLevel(self, math.max(realCurrent - totalDrained, 0), fillType, fillInfo)
+            originalSetFillLevel(self, math.max(realCurrentBefore - totalDrained, 0), fillType, fillInfo)
             self._realSiloApplying = false
         end
     end

@@ -131,7 +131,13 @@ function RealSiloConfigEvent.apply(uid, numComps, capacity, name, transferRate, 
     -- weet dat de admin hem nog niet heeft ingesteld.
     if ok and (serverConfirmsConfigured or g_server ~= nil) then
         realSiloManager.setConfigured(uid)
-        RealSiloCompartmentStorage.captureAndDistribute(uid)
+        -- Alleen de SERVER verdeelt bestaande inhoud over de vakken.
+        -- Op een client werd dit twee keer uitgevoerd (eerst lokaal bij het
+        -- opslaan, daarna nogmaals via de broadcast van de server), wat de
+        -- boekhouding scheeftrok en het lossen kon blokkeren.
+        if g_server ~= nil then
+            RealSiloCompartmentStorage.captureAndDistribute(uid)
+        end
         RealSiloEvents.broadcastSlotSync(uid)
     end
     RealSiloEvents.refreshDialog(uid)
@@ -143,6 +149,17 @@ function RealSiloConfigEvent:run(connection)
         "[realSilo][DIAG] ConfigEvent:run uid=%s numComps=%d isBroadcast=%s g_server=%s connection=%s isServerConfigured=%s",
         tostring(self.uid), self.numComps, tostring(self.isBroadcast),
         tostring(g_server ~= nil), tostring(connection ~= nil), tostring(self.isServerConfigured))
+    -- Een BROADCAST is bedoeld voor de andere clients. Komt hij op de
+    -- SERVER binnen, dan is die wijziging daar al verwerkt en moet er
+    -- niets meer gebeuren. Zonder deze controle voerde de server elke
+    -- configuratie twee keer uit (zichtbaar in het log als twee keer
+    -- "Config:" en twee keer captureAndDistribute in dezelfde
+    -- milliseconde), waardoor de vakverdeling opnieuw werd berekend op
+    -- een al gewijzigde toestand.
+    if g_server ~= nil and self.isBroadcast then
+        return
+    end
+
     if g_server ~= nil and connection ~= nil and not self.isBroadcast then
         if not RealSiloUtil.canManageSilo(self.uid, connection) then
             RealSiloDebug.print("[realSilo] Config-wijziging geweigerd: geen toestemming")
@@ -761,6 +778,10 @@ function RealSiloSlotSyncEvent:writeStream(streamId, connection)
         streamWriteUIntN(streamId, math.min(math.max(math.floor(s.fillLevel or 0), 0), 4294967295), 32)
         streamWriteUIntN(streamId, math.min(math.max(math.floor(s.capacity  or 0), 0), 4294967295), 32)
         streamWriteBool(streamId, s.isActive or false)
+        streamWriteBool(streamId, s.moisture ~= nil)
+        if s.moisture ~= nil then streamWriteFloat32(streamId, s.moisture) end
+        streamWriteBool(streamId, s.quality ~= nil)
+        if s.quality ~= nil then streamWriteFloat32(streamId, s.quality) end
     end
 end
 
@@ -770,12 +791,15 @@ function RealSiloSlotSyncEvent:readStream(streamId, connection)
     local n = streamReadUIntN(streamId, 6)
     self.slots = {}
     for _ = 1, n do
-        table.insert(self.slots, {
+        local incoming = {
             fillType  = streamReadUIntN(streamId, 14),
             fillLevel = streamReadUIntN(streamId, 32),
             capacity  = streamReadUIntN(streamId, 32),
             isActive  = streamReadBool(streamId),
-        })
+        }
+        if streamReadBool(streamId) then incoming.moisture = streamReadFloat32(streamId) end
+        if streamReadBool(streamId) then incoming.quality = streamReadFloat32(streamId) end
+        table.insert(self.slots, incoming)
     end
     self:run(connection)
 end
@@ -802,6 +826,14 @@ function RealSiloSlotSyncEvent:run(connection)
             slot.fillLevel = incoming.fillLevel
             if incoming.capacity > 0 then slot.capacity = incoming.capacity end
             slot.isActive  = incoming.isActive
+            slot.moisture  = incoming.moisture
+            slot.quality   = incoming.quality
+
+            -- Zie realSiloDryerCompat.lua/syncVirtualMoistureFromSlot: zonder
+            -- dit blijft MoistureSystem's eigen ms.objectInfo-kopie op deze
+            -- client hangen op de allereerste waarde, en veert het Grain
+            -- Drying-menu bij de eerstvolgende ververing gewoon terug.
+            RealSiloDryerCompat.syncVirtualMoistureFromSlot(self.uid, i)
         end
     end
 
@@ -827,6 +859,8 @@ local function buildSlotSyncData(uid)
             fillLevel = slot.fillLevel or 0,
             capacity  = slot.capacity  or 0,
             isActive  = slot.isActive  or false,
+            moisture  = slot.moisture,
+            quality   = slot.quality,
         })
     end
     return #slots > 0 and slots or nil
@@ -847,3 +881,103 @@ function RealSiloEvents.broadcastSlotSync(uid)
     g_server:broadcastEvent(RealSiloSlotSyncEvent.new(uid, slots, true), true, nil, nil)
 end
 
+-- ============================================================
+-- 8) MoistureSystem-droger starten/stoppen voor een vak-proxy
+--
+-- MoistureGuiDrying's eigen toggle-knop stuurt op een client een
+-- DryingToggleEvent met NetworkUtil.getObjectId(placeable) -- dat
+-- bestaat niet voor onze vak-proxy's (zie "OPGELOST" bovenaan
+-- realSiloDryerCompat.lua), dus die knop deed op afstand (elke
+-- speler op een dedicated server, want die is nooit "host/server")
+-- helemaal niets. Dit event is de vervanging: identificeert het vak
+-- via silo-uid + vakindex (gewone waarden, geen netwerk-object-id) en
+-- roept vervolgens FS25_MoistureSystem's eigen
+-- DryingSystem:toggleDrying()/:setDryingState() aan -- dat kijkt zelf
+-- alleen naar placeable.uniqueId (een string), dus onze synthetische
+-- vak-id werkt daar prima.
+-- ============================================================
+RealSiloDryerToggleEvent = {}
+local RealSiloDryerToggleEvent_mt = Class(RealSiloDryerToggleEvent, Event)
+InitEventClass(RealSiloDryerToggleEvent, "RealSiloDryerToggleEvent")
+
+function RealSiloDryerToggleEvent.emptyNew()
+    return Event.new(RealSiloDryerToggleEvent_mt)
+end
+
+function RealSiloDryerToggleEvent.new(uid, slotIndex, newState, isBroadcast)
+    local self = RealSiloDryerToggleEvent.emptyNew()
+    self.uid         = uid
+    self.slotIndex   = slotIndex
+    self.newState    = newState or false
+    self.isBroadcast = isBroadcast or false
+    return self
+end
+
+function RealSiloDryerToggleEvent:readStream(streamId, connection)
+    self.uid         = streamReadString(streamId)
+    self.slotIndex   = streamReadUIntN(streamId, 6)
+    self.newState    = streamReadBool(streamId)
+    self.isBroadcast = streamReadBool(streamId)
+    self:run(connection)
+end
+
+function RealSiloDryerToggleEvent:writeStream(streamId, connection)
+    streamWriteString(streamId, self.uid)
+    streamWriteUIntN(streamId, self.slotIndex, 6)
+    streamWriteBool(streamId, self.newState)
+    streamWriteBool(streamId, self.isBroadcast)
+end
+
+function RealSiloDryerToggleEvent:run(connection)
+    RealSiloDebug.print(
+        "[realSilo][DIAG] DryerToggleEvent:run uid=%s slot=%s isBroadcast=%s newState=%s g_server=%s connection=%s",
+        tostring(self.uid), tostring(self.slotIndex), tostring(self.isBroadcast), tostring(self.newState),
+        tostring(g_server ~= nil), tostring(connection ~= nil))
+
+    -- Broadcast (server -> clients): resultaat gewoon toepassen, nooit
+    -- opnieuw verwerken/broadcasten (zelfde regel als de andere events
+    -- hierboven).
+    if self.isBroadcast then
+        RealSiloDryerCompat.applyDryingState(self.uid, self.slotIndex, self.newState)
+        return
+    end
+
+    -- Verzoek van een client: alleen de server verwerkt dit.
+    if g_server == nil then return end
+
+    if connection ~= nil and not RealSiloUtil.canToggleSiloDryer(self.uid, connection) then
+        RealSiloDebug.print("[realSilo] Droger-toggle geweigerd: geen toestemming")
+        return
+    end
+
+    local isDrying = RealSiloDryerCompat.toggleDrying(self.uid, self.slotIndex)
+    if isDrying == nil then
+        RealSiloDebug.print("[realSilo][DIAG] Droger-toggle: vak %s#vak%s kon niet opnieuw opgebouwd worden",
+            tostring(self.uid), tostring(self.slotIndex))
+        return
+    end
+
+    RealSiloDebug.print("[realSilo][DIAG] Droger-toggle verwerkt op server: uid=%s slot=%s isDrying=%s",
+        tostring(self.uid), tostring(self.slotIndex), tostring(isDrying))
+
+    g_server:broadcastEvent(
+        RealSiloDryerToggleEvent.new(self.uid, self.slotIndex, isDrying, true),
+        true, nil, nil)
+end
+
+-- Aanroepen vanuit realSiloDryerCompat.lua's patch op MoistureGuiDrying
+function RealSiloEvents.sendDryerToggle(uid, slotIndex)
+    RealSiloDebug.print("[realSilo][DIAG] sendDryerToggle uid=%s slot=%s g_server=%s g_client=%s",
+        tostring(uid), tostring(slotIndex), tostring(g_server ~= nil), tostring(g_client ~= nil))
+    if g_server ~= nil then
+        local isDrying = RealSiloDryerCompat.toggleDrying(uid, slotIndex)
+        if isDrying == nil then
+            RealSiloDebug.print("[realSilo][DIAG] sendDryerToggle: lokale toggleDrying gaf nil (vak kon niet opgebouwd worden)")
+            return
+        end
+        g_server:broadcastEvent(RealSiloDryerToggleEvent.new(uid, slotIndex, isDrying, true), true, nil, nil)
+    else
+        g_client:getServerConnection():sendEvent(RealSiloDryerToggleEvent.new(uid, slotIndex, false, false))
+        RealSiloDebug.print("[realSilo][DIAG] sendDryerToggle: event verstuurd naar server")
+    end
+end
