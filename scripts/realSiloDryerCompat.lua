@@ -276,11 +276,18 @@ local function installOwnedDryablesSplit(instance)
         for _, placeable in ipairs(result) do
             local uid = placeable.realSiloUniqueId
             if uid ~= nil then
-                local data = RealSiloCompartmentStorage.siloSlots[uid]
-                if data and data.slots then
-                    for slotIndex = 1, #data.slots do
-                        local ok, proxy = pcall(buildProxyPlaceable, uid, slotIndex)
-                        if ok and proxy then table.insert(final, proxy) end
+                -- Per-silo instelbaar: als drogen voor deze silo is
+                -- uitgezet (RealSilo-instellingenmenu), dan biedt realSilo
+                -- deze silo helemaal niet aan MoistureSystem aan -- geen
+                -- vak-proxies EN niet de oorspronkelijke placeable. De
+                -- silo verdwijnt dus volledig uit het Grain Drying-menu.
+                if realSiloManager.isDryingAllowed(uid) then
+                    local data = RealSiloCompartmentStorage.siloSlots[uid]
+                    if data and data.slots then
+                        for slotIndex = 1, #data.slots do
+                            local ok, proxy = pcall(buildProxyPlaceable, uid, slotIndex)
+                            if ok and proxy then table.insert(final, proxy) end
+                        end
                     end
                 end
             else

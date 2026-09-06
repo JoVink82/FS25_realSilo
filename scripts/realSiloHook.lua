@@ -296,6 +296,7 @@ local function saveAllSiloData()
         setXMLInt(xmlFile,    key .. "#dryer",        silo.config.hasDryer and 1 or 0)
         setXMLInt(xmlFile,    key .. "#transferRate", silo.config.transferRate or 1000)
         setXMLInt(xmlFile,    key .. "#extensionRange", silo.config.extensionRange or 50)
+        setXMLInt(xmlFile,    key .. "#dryingAllowed", silo.config.dryingAllowed ~= false and 1 or 0)
         if silo.config.totalStorageCapacity then
             setXMLInt(xmlFile, key .. "#totalCap", silo.config.totalStorageCapacity)
         end
@@ -349,6 +350,7 @@ local function loadAllSiloData()
             hasDryer               = (getXMLInt(xmlFile, key .. "#dryer") or 0) == 1,
             transferRate           = getXMLInt(xmlFile, key .. "#transferRate") or 1000,
             extensionRange         = getXMLInt(xmlFile, key .. "#extensionRange") or 50,
+            dryingAllowed          = (getXMLInt(xmlFile, key .. "#dryingAllowed") or 1) == 1,
             totalStorageCapacity   = totalCap,
             slotCapacities         = next(slotCaps) and slotCaps or nil,
             naam                   = getXMLString(xmlFile, key .. "#naam"),
@@ -604,6 +606,13 @@ PlaceableSilo.onLoad = function(self, savegame)
     if cfg and cfg.extensionRange then
         local silo = realSiloManager.getSilo(uid)
         if silo then silo.config.extensionRange = cfg.extensionRange end
+    end
+    if cfg and cfg.dryingAllowed == false then
+        -- Alleen expliciet UIT overnemen; het standaard (AAN) ligt al vast
+        -- via realSiloManager.register(), en oude saves zonder dit veld
+        -- laden dankzij de default "1" in loadAllSiloData() toch als AAN.
+        local silo = realSiloManager.getSilo(uid)
+        if silo then silo.config.dryingAllowed = false end
     end
     if cfg and cfg.transferRate then
         local silo = realSiloManager.getSilo(uid)

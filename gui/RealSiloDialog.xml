@@ -48,6 +48,7 @@
             <SmoothList profile="realSiloConfigList" id="configList"
                         position="50px -80px" size="730px 410px"
                         focusChangeTop="nil" focusChangeBottom="nil"
+                        onClick="onListClick"
                         visible="false">
                 <ListItem profile="realSiloConfigRow" name="configRowInput" size="715px 60px">
                     <Text profile="realSiloConfigRowLabel" position="5px -10px" size="290px 40px" name="rowLabel"/>

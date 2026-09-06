@@ -57,7 +57,7 @@ function RealSiloConfigEvent.emptyNew()
     return Event.new(RealSiloConfigEvent_mt)
 end
 
-function RealSiloConfigEvent.new(uid, numComps, capacity, name, transferRate, isBroadcast, isConfigured, extensionRange)
+function RealSiloConfigEvent.new(uid, numComps, capacity, name, transferRate, isBroadcast, isConfigured, extensionRange, dryingAllowed)
     local self = RealSiloConfigEvent.emptyNew()
     self.uid              = uid
     self.numComps         = numComps
@@ -67,6 +67,8 @@ function RealSiloConfigEvent.new(uid, numComps, capacity, name, transferRate, is
     self.isBroadcast      = isBroadcast or false
     self.isServerConfigured = isConfigured or false
     self.extensionRange   = extensionRange or 50
+    if dryingAllowed == nil then dryingAllowed = true end
+    self.dryingAllowed    = dryingAllowed
     return self
 end
 
@@ -79,6 +81,7 @@ function RealSiloConfigEvent:readStream(streamId, connection)
     self.isBroadcast      = streamReadBool(streamId)
     self.isServerConfigured = streamReadBool(streamId)
     self.extensionRange     = streamReadUIntN(streamId, 9)
+    self.dryingAllowed      = streamReadBool(streamId)
     self:run(connection)
 end
 
@@ -91,9 +94,10 @@ function RealSiloConfigEvent:writeStream(streamId, connection)
     streamWriteBool(streamId, self.isBroadcast)
     streamWriteBool(streamId, self.isServerConfigured)
     streamWriteUIntN(streamId, math.min(math.max(self.extensionRange or 50, 1), 300), 9)
+    streamWriteBool(streamId, self.dryingAllowed ~= false)
 end
 
-function RealSiloConfigEvent.apply(uid, numComps, capacity, name, transferRate, serverConfirmsConfigured, extensionRange)
+function RealSiloConfigEvent.apply(uid, numComps, capacity, name, transferRate, serverConfirmsConfigured, extensionRange, dryingAllowed)
     realSiloManager.setSiloName(uid, name)
     local silo = realSiloManager.getSilo(uid)
     local rangeChanged = false
@@ -102,6 +106,9 @@ function RealSiloConfigEvent.apply(uid, numComps, capacity, name, transferRate, 
         if extensionRange ~= nil and silo.config.extensionRange ~= extensionRange then
             silo.config.extensionRange = extensionRange
             rangeChanged = true
+        end
+        if dryingAllowed ~= nil then
+            realSiloManager.setDryingAllowed(uid, dryingAllowed)
         end
     end
 
@@ -169,26 +176,26 @@ function RealSiloConfigEvent:run(connection)
     -- Op de SERVER geldt: isServerConfigured = true (we stellen zelf in).
     -- Bij een BROADCAST naar clients: gebruik de vlag die meegestuurd is.
     local confirmedConfigured = self.isServerConfigured or (g_server ~= nil and not self.isBroadcast)
-    RealSiloConfigEvent.apply(self.uid, self.numComps, self.capacity, self.name, self.transferRate, confirmedConfigured, self.extensionRange)
+    RealSiloConfigEvent.apply(self.uid, self.numComps, self.capacity, self.name, self.transferRate, confirmedConfigured, self.extensionRange, self.dryingAllowed)
     if g_server ~= nil and not self.isBroadcast then
         g_server:broadcastEvent(
-            RealSiloConfigEvent.new(self.uid, self.numComps, self.capacity, self.name, self.transferRate, true, true, self.extensionRange),
+            RealSiloConfigEvent.new(self.uid, self.numComps, self.capacity, self.name, self.transferRate, true, true, self.extensionRange, self.dryingAllowed),
             true, nil, nil)
     end
 end
 
 -- Aanroepen vanuit de dialoog
-function RealSiloEvents.sendConfig(uid, numComps, capacity, name, transferRate, extensionRange)
+function RealSiloEvents.sendConfig(uid, numComps, capacity, name, transferRate, extensionRange, dryingAllowed)
     if not RealSiloUtil.canManageSiloLocal(uid) then
         g_currentMission:addIngameNotification(FSBaseMission.INGAME_NOTIFICATION_CRITICAL,
             g_i18n:getText("realSilo_noPermission") or "Je hebt geen toestemming om deze silo te beheren.")
         return false, "noPermission"
     end
-    local ok, err = RealSiloConfigEvent.apply(uid, numComps, capacity, name, transferRate, true, extensionRange)
+    local ok, err = RealSiloConfigEvent.apply(uid, numComps, capacity, name, transferRate, true, extensionRange, dryingAllowed)
     if g_server ~= nil then
-        g_server:broadcastEvent(RealSiloConfigEvent.new(uid, numComps, capacity, name, transferRate, true, true, extensionRange), true, nil, nil)
+        g_server:broadcastEvent(RealSiloConfigEvent.new(uid, numComps, capacity, name, transferRate, true, true, extensionRange, dryingAllowed), true, nil, nil)
     else
-        g_client:getServerConnection():sendEvent(RealSiloConfigEvent.new(uid, numComps, capacity, name, transferRate, false, false, extensionRange))
+        g_client:getServerConnection():sendEvent(RealSiloConfigEvent.new(uid, numComps, capacity, name, transferRate, false, false, extensionRange, dryingAllowed))
     end
     return ok, err
 end

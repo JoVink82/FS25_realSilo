@@ -48,6 +48,13 @@ function realSiloManager.register(placeable, savedId, savedConfig)
     if cfg.extensionRange == nil then
         cfg.extensionRange = realSiloManager.DEFAULT_EXTENSION_RANGE or 50
     end
+    -- Drogen toestaan (per silo instelbaar, standaard AAN). Oude
+    -- savegames van vóór deze instelling hebben dit veld nog niet -- die
+    -- krijgen hier standaard "toegestaan", zodat bestaand gedrag niet
+    -- verandert totdat de admin het bewust uitzet voor een silo.
+    if cfg.dryingAllowed == nil then
+        cfg.dryingAllowed = true
+    end
 
     realSiloManager.silos[uniqueId] = {
         uniqueId = uniqueId,
@@ -249,6 +256,24 @@ end
 function realSiloManager.setHasDryer(uid, value)
     local silo = realSiloManager.silos[uid]
     if silo then silo.config.hasDryer = (value == true) end
+end
+
+-- ============================================================
+-- Drogen toestaan: per silo instelbaar via de instellingen-dialoog
+-- (RealSiloDialog page 2). Gebruikt door realSiloDryerCompat.lua om
+-- een silo wel/niet als geheel aan te bieden aan FS25_MoistureSystem's
+-- Grain Drying-menu. Standaard TOEGESTAAN (true) -- een silo zonder
+-- deze instelling (nog niet opgeslagen, of een oude savegame) mag dus
+-- gewoon drogen, exact het gedrag van vóór deze instelling bestond.
+-- ============================================================
+function realSiloManager.isDryingAllowed(uid)
+    local silo = realSiloManager.silos[uid]
+    return not silo or silo.config.dryingAllowed ~= false
+end
+
+function realSiloManager.setDryingAllowed(uid, value)
+    local silo = realSiloManager.silos[uid]
+    if silo then silo.config.dryingAllowed = (value ~= false) end
 end
 
 -- ============================================================

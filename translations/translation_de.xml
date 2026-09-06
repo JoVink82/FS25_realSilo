@@ -67,5 +67,6 @@
         <text name="realSilo_transferBlockedDrying" text="Transfer nicht moglich: dieses Silo wird gerade getrocknet."/>
         <text name="input_REALSILO_OPEN" text="RealSilo offnen"/>
         <text name="realSilo_extensionRange" text="Suchbereich Erweiterungen (m):"/>
+        <text name="realSilo_dryingAllowed" text="Trocknen fur dieses Silo erlauben:"/>
     </texts>
 </l10n>

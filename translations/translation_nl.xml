@@ -67,5 +67,6 @@
         <text name="realSilo_transferBlockedDrying" text="Transfer niet mogelijk: deze silo wordt op dit moment gedroogd."/>
         <text name="input_REALSILO_OPEN" text="RealSilo openen"/>
         <text name="realSilo_extensionRange" text="Zoekbereik extensions (m):"/>
+        <text name="realSilo_dryingAllowed" text="Drogen toestaan voor deze silo:"/>
     </texts>
 </l10n>

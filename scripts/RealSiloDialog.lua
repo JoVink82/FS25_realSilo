@@ -8,9 +8,10 @@ RealSiloDialog = {}
 local RealSiloDialog_mt = Class(RealSiloDialog, MessageDialog)
 
 -- Rij-types voor de config lijst
-local ROW_INFO  = 1  -- informatietekst
-local ROW_CALC  = 2  -- berekening (groen)
-local ROW_INPUT = 3  -- label + invoerveld
+local ROW_INFO   = 1  -- informatietekst
+local ROW_CALC   = 2  -- berekening (groen)
+local ROW_INPUT  = 3  -- label + invoerveld
+local ROW_TOGGLE = 4  -- label + AAN/UIT, klikbaar (zelfde cel als ROW_INFO/ROW_CALC, alleen labelEl)
 
 RealSiloDialog.CONTROLS = {
     "pageOverview", "pageConfig", "pageEditSlot", "pageTransfer",
@@ -345,6 +346,19 @@ function RealSiloDialog:buildConfigRows(uid, silo)
         digits  = true,
     })
 
+    -- Drogen toestaan (aan/uit, per silo)
+    -- Let op: NIET "uid and realSiloManager.isDryingAllowed(uid) or true"
+    -- gebruiken -- als isDryingAllowed() false teruggeeft (bewust
+    -- uitgezet), zou "false or true" dat stilzwijgend terugdraaien naar
+    -- true door Lua's and/or-valkuil.
+    local dryingAllowedVal = true
+    if uid then dryingAllowedVal = realSiloManager.isDryingAllowed(uid) end
+    table.insert(self.configRows, { type=ROW_TOGGLE,
+        label = g_i18n:getText("realSilo_dryingAllowed"),
+        value = dryingAllowedVal,
+        key   = "dryingAllowed",
+    })
+
     -- Berekening rij
     table.insert(self.configRows, { type=ROW_CALC,
         numComps = silo and silo.config.numCompartments or 4,
@@ -568,6 +582,17 @@ function RealSiloDialog:populateConfigCell(index, cell)
             inputEl:setVisible(true)
             row._inputElement = inputEl
         end
+
+    elseif row.type == ROW_TOGGLE then
+        -- Alleen het label-veld, net als ROW_INFO/ROW_CALC -- geen
+        -- apart knop-element nodig. Klikken op de rij (onListClick)
+        -- wisselt row.value om en herlaadt de lijst.
+        if labelEl then
+            local stateTxt = row.value and (g_i18n:getText("ui_on") or "AAN")
+                                        or (g_i18n:getText("ui_off") or "UIT")
+            labelEl:setText(string.format("%s %s", row.label or "", stateTxt))
+            labelEl:setVisible(true)
+        end
     end
 end
 -- Lees huidige waarde van een config-veld
@@ -584,6 +609,16 @@ function RealSiloDialog:getConfigValue(key)
                 end
             end
             -- Fallback: opgeslagen waarde
+            return row.value
+        end
+    end
+    return nil
+end
+
+-- Lees huidige waarde van een ROW_TOGGLE-veld (boolean, geen tekstinvoer)
+function RealSiloDialog:getConfigToggleValue(key)
+    for _, row in ipairs(self.configRows) do
+        if row.type == ROW_TOGGLE and row.key == key then
             return row.value
         end
     end
@@ -645,6 +680,14 @@ function RealSiloDialog:refreshList()
 end
 
 function RealSiloDialog:onListClick(list, section, index)
+    if list == self.configList then
+        local row = self.configRows and self.configRows[index]
+        if row and row.type == ROW_TOGGLE then
+            row.value = not row.value
+            self.configList:reloadData()
+        end
+        return
+    end
     if list ~= self.compartmentList then return end
     if not index or index < 1 or index > #self.compartmentEntries then return end
     if index == self.selectedIndex then return end
@@ -808,6 +851,8 @@ function RealSiloDialog:onConfirm()
     -- Zoekbereik extensions: 1 t/m 300 m (buiten dat bereik heeft het
     -- geen zin; 0 zou alle extensions loskoppelen).
     local extRange     = math.floor(math.min(math.max(tonumber(extRangeStr) or 50, 1), 300))
+    local dryingAllowed = self:getConfigToggleValue("dryingAllowed")
+    if dryingAllowed == nil then dryingAllowed = true end
 
     if not numComps or numComps < 1 or numComps > 32 then
         g_currentMission:addIngameNotification(FSBaseMission.INGAME_NOTIFICATION_CRITICAL,
@@ -842,7 +887,7 @@ function RealSiloDialog:onConfirm()
         end
     end
 
-    local ok, err = RealSiloEvents.sendConfig(uid, numComps, cap, naam, transferRate, extRange)
+    local ok, err = RealSiloEvents.sendConfig(uid, numComps, cap, naam, transferRate, extRange, dryingAllowed)
     RealSiloDebug.print("[realSilo][DIAG] sendConfig resultaat: ok=%s err=%s", tostring(ok), tostring(err))
     if ok then
         local silo = realSiloManager.getSilo(uid)
