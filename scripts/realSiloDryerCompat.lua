@@ -42,13 +42,10 @@
 -- ververing van het Grain Drying-menu (~1x/sec zolang het open staat)
 -- als bij elke uur-tick voor vakken die actief drogen.
 --
--- BEPERKING: op een MULTIPLAYER-CLIENT (niet host/server) stuurt
--- MoistureGuiDrying's toggle-knop een netwerk-event met de
--- NetworkUtil-object-id van de placeable -- die bestaat niet voor onze
--- proxy's (het zijn geen echte, genetwerkte objecten). Drogen
--- starten/stoppen via dit menu werkt daardoor alleen als host/server
--- (bij singleplayer altijd het geval). Lijst bekijken/ETA/vocht per
--- vak blijft ook op een client gewoon werken.
+-- Op een MULTIPLAYER-CLIENT kan MoistureSystem's standaard netwerk-event
+-- geen proxy versturen omdat die geen NetworkUtil-object-id heeft. Daarom
+-- onderscheppen we voor RealSilo-vakken de toggle-knop en sturen we via
+-- RealSiloDryerToggleEvent de silo-uid + vakindex naar de server.
 --
 -- Is FS25_MoistureSystem niet actief, dan doet dit bestand niets.
 -- ============================================================
@@ -141,6 +138,53 @@ local function buildProxyPlaceable(uid, slotIndex)
         return string.format("%s - %s %d", baseName, vakLabel, slotIndex)
     end
     return proxy
+end
+
+-- Beschikbaar voor RealSiloDryerToggleEvent op de server.
+RealSiloDryerCompat.buildProxyPlaceable = buildProxyPlaceable
+
+local function getDryingFrameController()
+    local root = g_gui and g_gui.frames and g_gui.frames["MoistureGuiDrying"]
+    return root and root.target or nil
+end
+
+function RealSiloDryerCompat.refreshDryingGui()
+    local controller = getDryingFrameController()
+    if controller ~= nil and controller.refreshList ~= nil then
+        controller:refreshList()
+    end
+end
+
+-- Dedicated clients kunnen voor een vak-proxy geen standaard
+-- DryingToggleEvent maken. Onderschep uitsluitend RealSilo-vakken in het
+-- bestaande MoistureSystem-scherm; alle normale silo's blijven via de
+-- originele handler lopen.
+local function installDedicatedGuiToggle()
+    if g_currentMission == nil or g_currentMission:getIsServer() then return true end
+    local controller = getDryingFrameController()
+    if controller == nil or type(controller.onClickToggleDrying) ~= "function" then
+        return false
+    end
+    if controller._realSiloDedicatedToggleInstalled then return true end
+    controller._realSiloDedicatedToggleInstalled = true
+
+    local originalOnClick = controller.onClickToggleDrying
+    controller.onClickToggleDrying = function(self, ...)
+        local entry = self:getSelectedEntry()
+        local placeable = entry and entry.placeable
+        if placeable ~= nil and placeable.realSiloUniqueId ~= nil
+                and placeable.realSiloSlotIndex ~= nil then
+            if not self:canToggle(entry) then return end
+            RealSiloDebug.print("[realSilo] Dedicated droger-verzoek: uid=%s vak=%d",
+                tostring(placeable.realSiloUniqueId), placeable.realSiloSlotIndex)
+            RealSiloEvents.sendDryerToggle(
+                placeable.realSiloUniqueId, placeable.realSiloSlotIndex)
+            return
+        end
+        return originalOnClick(self, ...)
+    end
+    RealSiloDebug.print("[realSilo] MoistureSystem dedicated droger-toggle per vak actief")
+    return true
 end
 
 -- v14c -- BUGFIX: de metatable-truc (getmetatable(instance).__index)
@@ -288,14 +332,15 @@ local function tryInstallDryerCompat()
     local ok1 = installOwnedDryablesSplit(instance)
     local ok2 = installGetPlaceableByUniqueIdPatch(instance)
     local ok3 = installDrySiloSafetyNet(instance)
-    if ok1 and ok2 and ok3 then
+    local ok4 = installDedicatedGuiToggle()
+    if ok1 and ok2 and ok3 and ok4 then
         RealSiloDebug.print("[realSilo][DIAG] realSiloDryerCompat: installatie voltooid na " .. tostring(_dryerCompatAttempts) .. " poging(en)")
         return true
     end
     if _dryerCompatAttempts == 1 or _dryerCompatAttempts % 600 == 0 then
         RealSiloDebug.print(
-            "[realSilo][DIAG] realSiloDryerCompat: nog niet compleet | getOwnedDryables=%s getPlaceableByUniqueId=%s drySilo=%s",
-            tostring(ok1), tostring(ok2), tostring(ok3))
+            "[realSilo][DIAG] realSiloDryerCompat: nog niet compleet | getOwnedDryables=%s getPlaceableByUniqueId=%s drySilo=%s dedicatedGui=%s",
+            tostring(ok1), tostring(ok2), tostring(ok3), tostring(ok4))
     end
     return false
 end
