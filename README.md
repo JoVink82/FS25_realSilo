@@ -2,10 +2,6 @@
 
 - New per-silo setting in the settings menu: "Allow drying for this silo". Turn it off for a silo that should never offer grain drying, and it disappears entirely from FS25_MoistureSystem's Grain Drying menu. Only an admin can change it, and the setting is saved and synced to all players. Existing silos default to allowed, so nothing changes until you turn it off.
 
-- fixed the naming not corectly shown every where
-- if you speed up the time the transfer speeds up to
-- fixed ESC/Cancel not working during the first-time silo configuration (you can now cancel out of it)
-- transferring into a compartment that already has a different crop now gives a clear error instead of silently doing nothing
 
 
 RealSilo divides your silos into separate compartments, each for one type of product. Instead of mixing everything into one large storage, you decide how many compartments a silo gets and how much each one can hold.
