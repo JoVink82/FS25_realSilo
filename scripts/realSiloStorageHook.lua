@@ -296,15 +296,26 @@ Storage.setFillLevel = function(self, fillLevel, fillType, fillInfo)
             -- vocht/kwaliteit dit specifieke vak heeft, zodat de trailer die
             -- nu laadt de juiste waarde krijgt in plaats van de gedeelde,
             -- mogelijk-van-een-ander-vak-afkomstige MoistureSystem-waarde.
+            -- Direct na de echte update weer terugzetten, zodat ANDERE
+            -- vakken zonder eigen vocht-record (die op deze gedeelde
+            -- waarde vertrouwen) niet blijvend de waarde van dit vak
+            -- overnemen.
+            local moistureUid, moistureFtName, moisturePrev
             if RealSiloMoistureCompat ~= nil
                     and RealSiloMoistureCompat.recordStorageWithdrawal ~= nil then
-                RealSiloMoistureCompat.recordStorageWithdrawal(uid, active, fillType)
+                moistureUid, moistureFtName, moisturePrev =
+                    RealSiloMoistureCompat.recordStorageWithdrawal(uid, active, fillType)
             end
 
             self._realSiloApplying = true
             originalSetFillLevel(self, math.max(realCurrentBefore - totalDrained, 0), fillType, fillInfo)
             self._realSiloApplying = false
             scheduleSlotSyncCorrection(uid)
+
+            if moistureUid ~= nil and RealSiloMoistureCompat ~= nil
+                    and RealSiloMoistureCompat.restoreSharedMoistureInfo ~= nil then
+                RealSiloMoistureCompat.restoreSharedMoistureInfo(moistureUid, moistureFtName, moisturePrev)
+            end
         end
     end
 end

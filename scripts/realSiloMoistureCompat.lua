@@ -320,23 +320,58 @@ end
 -- gedeelde waarde, die van een heel ANDER (bijv. niet-gedroogd) vak
 -- kan stammen dan het vak waar deze specifieke lading daadwerkelijk
 -- uit komt (gemeld: 16% vocht/grade B in het vak, maar 14%/grade A in
--- de trailer). Roep dit aan VLAK VOORDAT de echte storage-update
--- gebeurt, zodat MoistureSystem's eigen laad-hook (die op hetzelfde
--- moment vuurt) de waarde van het JUISTE vak ziet.
+-- de trailer).
+--
+-- BUGFIX: de EERSTE versie hiervan schreef permanent naar de gedeelde
+-- waarde. Daardoor "besmette" het laden uit een gedroogd vak (bv. vak 3,
+-- 15.3%) de gedeelde waarde die ANDERE, nooit-gedroogde vakken zonder
+-- eigen record (bv. vak 2, 18%) gebruiken om hun EIGEN vochtpercentage
+-- te tonen -- gemeld: na het laden uit vak 3 en daarna transferen van
+-- vak 2 naar vak 3, toonden BEIDE vakken 15.3% in plaats van dat vak 2's
+-- 18% behouden bleef. Vandaar nu een tijdelijke set-en-herstel: de
+-- gedeelde waarde wordt hier VLAK VOOR de echte storage-update naar het
+-- juiste (actieve) vak gezet -- zodat MoistureSystem's eigen laad-hook,
+-- die synchroon binnen dezelfde aanroep vuurt, de juiste waarde ziet --
+-- en direct daarna weer teruggezet naar wat het was, via
+-- restoreSharedMoistureInfo (aangeroepen door de storage-hook meteen na
+-- originalSetFillLevel), zodat andere vakken niet blijvend geraakt worden.
+--
+-- Retourneert (uniqueId, fillTypeName, previousInfo) voor gebruik door
+-- restoreSharedMoistureInfo, of nil als er niets aangepast is.
 -- ----------------------------------------------------------------
 function RealSiloMoistureCompat.recordStorageWithdrawal(uid, slot, fillType)
     local ms = g_currentMission and g_currentMission.MoistureSystem
-    if ms == nil or slot == nil or slot.moisture == nil or ms.setObjectInfo == nil then
-        return
+    if ms == nil or slot == nil or slot.moisture == nil or ms.objectInfo == nil then
+        return nil
     end
     local data  = RealSiloCompartmentStorage.siloSlots[uid]
     local owner = getMoistureOwner(data and data.placeable, uid)
-    if owner == nil or owner.uniqueId == nil then return end
+    if owner == nil or owner.uniqueId == nil then return nil end
 
-    pcall(ms.setObjectInfo, ms, owner.uniqueId, fillType, {
+    local fillTypeName = g_fillTypeManager and g_fillTypeManager:getFillTypeNameByIndex(fillType)
+    if fillTypeName == nil then return nil end
+
+    local previous = ms.objectInfo[owner.uniqueId] and ms.objectInfo[owner.uniqueId][fillTypeName]
+
+    ms.objectInfo[owner.uniqueId] = ms.objectInfo[owner.uniqueId] or {}
+    ms.objectInfo[owner.uniqueId][fillTypeName] = {
         moisture = slot.moisture,
         quality  = slot.quality
-    })
+    }
+
+    return owner.uniqueId, fillTypeName, previous
+end
+
+-- Zet de gedeelde MoistureSystem-waarde terug naar wat hij was vóór
+-- recordStorageWithdrawal hem tijdelijk overschreef. `previous` mag nil
+-- zijn (er was nog geen gedeelde waarde) -- dat wist de key gewoon weer.
+function RealSiloMoistureCompat.restoreSharedMoistureInfo(uniqueId, fillTypeName, previous)
+    local ms = g_currentMission and g_currentMission.MoistureSystem
+    if ms == nil or ms.objectInfo == nil or uniqueId == nil or fillTypeName == nil then
+        return
+    end
+    if ms.objectInfo[uniqueId] == nil then return end
+    ms.objectInfo[uniqueId][fillTypeName] = previous
 end
 
 -- Verstuur vocht/kwaliteit eenmaal kort nadat een storting klaar is, niet
