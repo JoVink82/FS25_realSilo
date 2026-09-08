@@ -35,6 +35,29 @@ RealSiloStorageHook.getRealFillLevel = function(storage, fillType)
 end
 
 -- ----------------------------------------------------------------
+-- Server en client rekenen elk ONAFHANKELIJK van elkaar hun eigen
+-- per-vak boekhouding uit, tick voor tick, terwijl alleen het ECHTE
+-- storage-totaal door Giants zelf gesynchroniseerd wordt. Een silo met
+-- meerdere vakken van hetzelfde product kan daardoor client-zijdig een
+-- ANDERE verdeling over de vakken uitkomen dan server-zijdig (gemeld:
+-- client bleef bij het laden op het niveau van het ANDERE vak steken
+-- in plaats van door te tellen naar 0, terwijl de server wel correct
+-- naar 0 liep). Hergebruik daarom, net als realSiloMoistureCompat.lua
+-- al voor droog-updates doet, het bestaande gethrottlede slot-sync-
+-- kanaal: plan na ELKE succesvolle storten/laden-wijziging een volledige
+-- server->client herstel-broadcast, zodat een eventuele lokale
+-- afwijking op de client vanzelf weer gelijkgetrokken wordt.
+-- ----------------------------------------------------------------
+local function scheduleSlotSyncCorrection(uid)
+    if g_server == nil or RealSiloMoistureCompat == nil
+            or RealSiloMoistureCompat.pendingSlotSync == nil then
+        return
+    end
+    local now = g_currentMission and g_currentMission.time or 0
+    RealSiloMoistureCompat.pendingSlotSync[uid] = now + 250
+end
+
+-- ----------------------------------------------------------------
 -- getFillLevels (MEERVOUD): toont alleen het actieve vak aan
 -- laad-triggers zodat de "selecteer silo"-dialoog slechts één
 -- product tegelijk aanbiedt. Ongeconfigureerde silo's: pass-through.
@@ -244,6 +267,7 @@ Storage.setFillLevel = function(self, fillLevel, fillType, fillInfo)
         self._realSiloApplying = true
         originalSetFillLevel(self, realCurrentBefore + added, fillType, fillInfo)
         self._realSiloApplying = false
+        scheduleSlotSyncCorrection(uid)
 
     elseif delta < 0 then
         local toRemove    = -delta
@@ -280,6 +304,7 @@ Storage.setFillLevel = function(self, fillLevel, fillType, fillInfo)
             self._realSiloApplying = true
             originalSetFillLevel(self, math.max(realCurrentBefore - totalDrained, 0), fillType, fillInfo)
             self._realSiloApplying = false
+            scheduleSlotSyncCorrection(uid)
         end
     end
 end
