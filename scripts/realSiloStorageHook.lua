@@ -261,7 +261,7 @@ Storage.setFillLevel = function(self, fillLevel, fillType, fillInfo)
         if RealSiloMoistureCompat ~= nil
                 and RealSiloMoistureCompat.recordStorageDeposit ~= nil then
             RealSiloMoistureCompat.recordStorageDeposit(
-                uid, active, fillType, oldActiveLevel, added)
+                uid, active, fillType, oldActiveLevel, added, data.activeSlot)
         end
 
         self._realSiloApplying = true

@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8" standalone="no"?>
 <modDesc descVersion="111">
     <author>Jo_Vink</author>
-    <version>1.2.0.4</version>
+    <version>1.2.0.5</version>
     <title>
         <en>RealSilo – Realistic Silo Compartments</en>
         <nl>RealSilo – Realistische Silo Compartimenten</nl>
@@ -19,6 +19,13 @@ How it works:
 - In multiplayer only the admin (logged in via the multiplayer menu) can change the silo settings. Other players can use the silo normally and view the compartment overview.
 
 Please report problems on GitHub: https://github.com/JoVink82/FS25_realSilo
+
+Changelog 1.2.0.5:
+- Fixed a serious bug where loading grain from a compartment into a trailer removed far more than the trailer actually received, causing product to vanish, when another compartment held the same crop.
+- Fixed the moisture/quality percentage shown when loading from a dried compartment into a trailer; it now matches that compartment's own value instead of a different compartment's.
+- Fixed the compartment breakdown shown in the menu and world infobox getting stuck on a stale value for connected players after loading or unloading; server and clients are now kept in sync.
+- Fixed a moisture bleed where drying and then loading from one compartment could permanently overwrite the shared FS25_MoistureSystem value, making a completely different, never-dried compartment in the same silo show the wrong moisture afterwards.
+- Fixed the same bleed for the deposit direction: unloading a trailer into a compartment no longer overwrites the shared moisture value used by other compartments of the same silo.
 
 Changelog 1.2.0.4:
 - The start/stop drying button in FS25_MoistureSystem's Grain Drying menu now also works for players connected to a dedicated server as a client, not only for the host.
@@ -71,6 +78,13 @@ Hoe het werkt:
 
 Problemen graag melden op GitHub: https://github.com/JoVink82/FS25_realSilo
 
+Changelog v1.2.0.5:
+- Ernstige bug opgelost waarbij het laden van graan uit een vak in een trailer véél meer verwijderde dan de trailer daadwerkelijk kreeg, waardoor product verdween als een ander vak hetzelfde gewas bevatte.
+- Het getoonde vocht-/kwaliteitspercentage bij het laden vanuit een gedroogd vak in een trailer opgelost; dit komt nu overeen met de waarde van dat vak zelf in plaats van die van een ander vak.
+- Opgelost dat de vakverdeling in het menu en de wereld-infobox bij verbonden spelers bleef hangen op een verouderde waarde na laden of lossen; server en clients blijven nu gesynchroniseerd.
+- Vocht-lek opgelost waarbij drogen en daarna laden uit één vak de gedeelde FS25_MoistureSystem-waarde blijvend kon overschrijven, waardoor een heel ander, nooit-gedroogd vak in dezelfde silo daarna het verkeerde vochtpercentage toonde.
+- Hetzelfde lek opgelost voor de stort-richting: een trailer lossen in een vak overschrijft niet langer de gedeelde vochtwaarde die andere vakken van dezelfde silo gebruiken.
+
 Changelog v1.2.0.4:
 - De start/stop-knop voor drogen in het Grain Drying-menu van FS25_MoistureSystem werkt nu ook voor spelers die als client verbinden met een dedicated server, niet meer alleen voor de host.
 - Het vochtpercentage van een vak in het Grain Drying-menu blijft bij verbonden spelers niet langer hangen op de beginwaarde terwijl er gedroogd wordt; het wordt nu bijgewerkt zodra het gewas daadwerkelijk droogt.
@@ -121,6 +135,13 @@ So funktioniert es:
 Bitte melden Sie Probleme unter GitHub: https://github.com/JoVink82/FS25_realSilo
 
 
+Changelog v1.2.0.5:
+- Schwerwiegenden Fehler behoben, bei dem das Laden von Getreide aus einem Fach in einen Anhänger weit mehr entfernte, als der Anhänger tatsächlich erhielt, wodurch Ware verschwand, wenn ein anderes Fach dieselbe Frucht enthielt.
+- Den beim Laden aus einem getrockneten Fach in einen Anhänger angezeigten Feuchtigkeits-/Qualitätswert behoben; er stimmt jetzt mit dem Wert dieses Fachs überein statt mit dem eines anderen Fachs.
+- Behoben, dass die im Menü und in der Welt-Infobox angezeigte Fachverteilung bei verbundenen Spielern nach dem Laden oder Entladen auf einem veralteten Wert hängen blieb; Server und Clients bleiben jetzt synchron.
+- Feuchtigkeitsleck behoben, bei dem Trocknen und anschließendes Laden aus einem Fach den gemeinsamen FS25_MoistureSystem-Wert dauerhaft überschreiben konnte, wodurch ein völlig anderes, nie getrocknetes Fach im selben Silo danach den falschen Feuchtigkeitswert anzeigte.
+- Dasselbe Leck für die Einlagerungs-Richtung behoben: Das Entladen eines Anhängers in ein Fach überschreibt nicht mehr den gemeinsamen Feuchtigkeitswert, den andere Fächer desselben Silos verwenden.
+
 Changelog v1.2.0.4:
 - Die Start/Stopp-Trocknen-Schaltfläche im Grain Drying-Menü von FS25_MoistureSystem funktioniert jetzt auch für Spieler, die sich als Client mit einem Dedicated Server verbinden, nicht mehr nur für den Host.
 - Der im Grain Drying-Menü angezeigte Feuchtigkeitswert eines Fachs bleibt bei verbundenen Spielern nicht mehr auf dem Anfangswert stehen, während getrocknet wird; er wird jetzt aktualisiert, sobald das Getreide tatsächlich trocknet.
@@ -159,7 +180,7 @@ Changelog v1.1.0.1:
 - Kompatibel mit FS25_MoistureSystem v2.0.0.3: jedes Fach trocknet jetzt unabhangig.
 ]]></de>
     </description>
-    <multiplayer supported="true"/>
+    <multiplayer supported="true" />
     <iconFilename>icon_RealSilo.dds</iconFilename>
 
     <actions>
@@ -172,32 +193,32 @@ Changelog v1.1.0.1:
              anders vuurt de callback niet en gaat het menu niet open. Met
              K als toets is er geen botsing meer met het spel, dus is dit
              nu veilig. De toets is aanpasbaar via Opties, Besturing. -->
-        <action name="REALSILO_OPEN" axisType="HALF_POSITIVE_AXIS" triggerAlways="false" isSink="true"/>
-        <action name="REALSILO_TRANSFER" axisType="HALF_POSITIVE_AXIS" triggerAlways="false" isSink="true"/>
+        <action name="REALSILO_OPEN" axisType="HALF_POSITIVE_AXIS" triggerAlways="false" isSink="true" />
+        <action name="REALSILO_TRANSFER" axisType="HALF_POSITIVE_AXIS" triggerAlways="false" isSink="true" />
     </actions>
     <inputBinding>
         <actionBinding action="REALSILO_OPEN">
-            <binding device="KB_MOUSE_DEFAULT" input="KEY_k"/>
+            <binding device="KB_MOUSE_DEFAULT" input="KEY_k" />
         </actionBinding>
         <actionBinding action="REALSILO_TRANSFER">
-            <binding device="KB_MOUSE_DEFAULT" input="KEY_t"/>
+            <binding device="KB_MOUSE_DEFAULT" input="KEY_t" />
         </actionBinding>
     </inputBinding>
 
     <extraSourceFiles>
-        <sourceFile filename="scripts/RealSiloDebug.lua"/>
-        <sourceFile filename="scripts/RealSiloUtil.lua"/>
-        <sourceFile filename="scripts/realSiloManager.lua"/>
-        <sourceFile filename="scripts/realSiloCompartmentStorage.lua"/>
-        <sourceFile filename="scripts/realSiloStorageHook.lua"/>
-        <sourceFile filename="scripts/realSiloExtensionManager.lua"/>
-        <sourceFile filename="scripts/realSiloEvents.lua"/>
-        <sourceFile filename="scripts/RealSiloDialog.lua"/>
-        <sourceFile filename="scripts/realSiloActivatable.lua"/>
-        <sourceFile filename="scripts/realSiloHook.lua"/>
-        <sourceFile filename="scripts/realSiloMoistureCompat.lua"/>
-        <sourceFile filename="scripts/realSiloDryerCompat.lua"/>
+        <sourceFile filename="scripts/RealSiloDebug.lua" />
+        <sourceFile filename="scripts/RealSiloUtil.lua" />
+        <sourceFile filename="scripts/realSiloManager.lua" />
+        <sourceFile filename="scripts/realSiloCompartmentStorage.lua" />
+        <sourceFile filename="scripts/realSiloStorageHook.lua" />
+        <sourceFile filename="scripts/realSiloExtensionManager.lua" />
+        <sourceFile filename="scripts/realSiloEvents.lua" />
+        <sourceFile filename="scripts/RealSiloDialog.lua" />
+        <sourceFile filename="scripts/realSiloActivatable.lua" />
+        <sourceFile filename="scripts/realSiloHook.lua" />
+        <sourceFile filename="scripts/realSiloMoistureCompat.lua" />
+        <sourceFile filename="scripts/realSiloDryerCompat.lua" />
     </extraSourceFiles>
 
-    <l10n filenamePrefix="translations/translation"/>
+    <l10n filenamePrefix="translations/translation" />
 </modDesc>

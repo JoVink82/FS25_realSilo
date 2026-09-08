@@ -264,16 +264,20 @@ local function installUnloadMoistureHook()
             fillLevelDelta, fillTypeIndex, toolType, fillPositionData, extraAttributes)
 
         RealSiloMoistureCompat.activeDeposit = parentDeposit
-        if deposit.uid ~= nil and deposit.slot ~= nil and ms ~= nil then
-            local data = RealSiloCompartmentStorage.siloSlots[deposit.uid]
-            local owner = getMoistureOwner(data and data.placeable, deposit.uid)
-            if owner ~= nil and owner.uniqueId ~= nil and ms.setObjectInfo ~= nil then
-                pcall(ms.setObjectInfo, ms, owner.uniqueId, fillTypeIndex, {
-                    moisture = deposit.slot.moisture,
-                    quality = deposit.slot.quality
-                })
-            end
-        end
+        -- BUGFIX: dit schreef vroeger het zojuist ontvangen vak se eigen
+        -- (gemengde) vocht/kwaliteit permanent naar de GEDEELDE
+        -- MoistureSystem-waarde voor de hele silo+gewas. Niets in deze
+        -- functie leest die waarde nog terug (deposit.slot.moisture is al
+        -- rechtstreeks op het vak zelf gezet, een paar regels hierboven in
+        -- recordStorageDeposit) -- het enige effect was dat een ANDER,
+        -- nooit-gedroogd vak van dezelfde silo (dat nog geen eigen record
+        -- heeft) bij zijn EERSTE latere uitlezing deze waarde overnam en
+        -- daarna blijvend "gepind" bleef -- exact het gemelde probleem:
+        -- na lossen/storten bij vak 3 (gedroogd) toonde vak 2 (nooit
+        -- gedroogd, 18%) ineens ook vak 3's percentage. Vandaar verwijderd;
+        -- de gedeelde waarde blijft nu ongemoeid door deze functie, precies
+        -- zoals MoistureSystem hem zelf al bijhield (het gedrag van vóór
+        -- realSilo's vak-opsplitsing).
         return applied
     end
 end
@@ -281,7 +285,23 @@ end
 -- Wordt vanuit de Storage-hook aangeroepen terwijl exact bekend is welk vak
 -- de liters heeft ontvangen. Meng vocht en kwaliteit volumegewogen binnen dat
 -- vak; raak geen enkel ander compartiment aan.
-function RealSiloMoistureCompat.recordStorageDeposit(uid, slot, fillType, oldLevel, added)
+--
+-- BUGFIX: schrijft de zojuist bijgewerkte waarde nu ONMIDDELLIJK ook naar dit
+-- vak se EIGEN, geïsoleerde MoistureSystem-record (dezelfde virtuele
+-- "<uid>#vak<N>"-sleutel die realSiloDryerCompat.lua voor drogen gebruikt) in
+-- plaats van alleen op slot.moisture. Reden: zonder dit werd een vak dat nog
+-- nooit gedroogd was pas bij zijn EERSTE latere UITLEZING (getEffectiveMoistureInfo)
+-- gekoppeld aan een eigen waarde -- tot dat moment bleef het op de gedeelde,
+-- silo-brede MoistureSystem-waarde vertrouwen. Was die gedeelde waarde
+-- ondertussen (door drogen/lossen van een ANDER vak) veranderd, dan "erfde"
+-- dit vak bij zijn eerste uitlezing een percentage dat nooit het zijne was --
+-- gemeld: een nooit-gedroogd vak toonde na een transfer plotseling het
+-- percentage van een wél gedroogd vak. Door hier meteen te schrijven krijgt
+-- ELK vak zijn eigen record vanaf het moment het voor het eerst product
+-- ontvangt, en is het daarna volledig immuun voor wat er elders in de silo
+-- gebeurt -- ook als de gedeelde waarde nog verouderde data uit een eerdere
+-- (inmiddels gerepareerde) sessie bevat.
+function RealSiloMoistureCompat.recordStorageDeposit(uid, slot, fillType, oldLevel, added, slotIndex)
     local deposit = RealSiloMoistureCompat.activeDeposit
     local sourceInfo = deposit and deposit.sourceInfo
     if deposit == nil or deposit.fillType ~= fillType or sourceInfo == nil
@@ -300,6 +320,16 @@ function RealSiloMoistureCompat.recordStorageDeposit(uid, slot, fillType, oldLev
         local sourceQuality = sourceInfo.quality or oldQuality
         slot.quality = ((oldLevel * oldQuality)
             + (added * sourceQuality)) / newLevel
+    end
+
+    if slotIndex ~= nil and RealSiloDryerCompat ~= nil and RealSiloDryerCompat.buildVirtualId ~= nil then
+        local ms = g_currentMission and g_currentMission.MoistureSystem
+        local fillTypeName = g_fillTypeManager and g_fillTypeManager:getFillTypeNameByIndex(fillType)
+        if ms ~= nil and fillTypeName ~= nil then
+            local virtualId = RealSiloDryerCompat.buildVirtualId(uid, slotIndex)
+            ms.objectInfo[virtualId] = ms.objectInfo[virtualId] or {}
+            ms.objectInfo[virtualId][fillTypeName] = { moisture = slot.moisture, quality = slot.quality }
+        end
     end
 
     deposit.uid = uid
