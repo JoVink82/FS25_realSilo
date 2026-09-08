@@ -170,6 +170,7 @@ Storage.setFillLevel = function(self, fillLevel, fillType, fillInfo)
     -- 1.000 l in een leeg actief vak gestort; de oude berekening maakte daar
     -- ten onrechte 1.700 l van.
     local realCurrentBefore = originalGetFillLevel(self, fillType)
+    local virtualCurrent    = virtualFillLevel(data, self, fillType)
     local activeDeposit = RealSiloMoistureCompat and RealSiloMoistureCompat.activeDeposit
     local isTriggerDeposit = activeDeposit ~= nil
         and activeDeposit.fillType == fillType
@@ -180,8 +181,28 @@ Storage.setFillLevel = function(self, fillLevel, fillType, fillInfo)
         -- werkt zowel na wisselen van een vol vak naar een leeg vak als bij
         -- bestaande inhoud van hetzelfde product in andere vakken.
         delta = activeDeposit.remainingAmount
-    else
+    elseif fillLevel > realCurrentBefore then
+        -- Storten: Giants' eigen berekening is gebaseerd op het ECHTE
+        -- storage-totaal (zie toelichting hierboven), dus de referentie
+        -- hier moet dat ook zijn.
         delta = fillLevel - realCurrentBefore
+    elseif fillLevel < virtualCurrent then
+        -- Laden/pickup: LoadingStation:removeFillLevel bepaalt zijn eigen
+        -- "oldFillLevel" via ONZE gehookte getFillLevel, die (terecht)
+        -- alleen het actieve vak teruggeeft. De delta hier moet daarom
+        -- OOK tegen die referentie berekend worden -- niet tegen het
+        -- storage-brede totaal. Anders telt de inhoud van ANDERE vakken
+        -- met hetzelfde product mee als "te verwijderen", en trekt drain()
+        -- het actieve vak in één klap volledig leeg terwijl de trailer
+        -- maar een fractie daadwerkelijk ontvangt (gemeld: 1000 l gedroogd
+        -- product verdween uit het vak, trailer kreeg maar 72 l). Dit is
+        -- CLAUDE.md valkuil 1 in de andere richting: getFillLevel en de
+        -- delta-berekening moeten dezelfde bron gebruiken.
+        delta = fillLevel - virtualCurrent
+    else
+        -- fillLevel ligt tussen de twee referenties in -- komt via normale
+        -- Giants-aanroepen niet voor. Geen wijziging toepassen.
+        delta = 0
     end
 
     -- Geen epsilon gebruiken voor live storage-mutaties. GIANTS laat een
@@ -242,7 +263,20 @@ Storage.setFillLevel = function(self, fillLevel, fillType, fillInfo)
 
         if active then drain(active) end
 
+        RealSiloDebug.print(
+            "[realSilo][DIAG] laden uid=%s ft=%s gevraagd=%.0f virtueelVoor=%.0f delta=%.0f gedraineerd=%.0f actiefVak=%d",
+            tostring(uid), tostring(fillType), fillLevel, virtualCurrent, delta, totalDrained, data.activeSlot)
+
         if totalDrained > 0 then
+            -- Vlak VOOR de echte storage-update: vertel MoistureSystem welk
+            -- vocht/kwaliteit dit specifieke vak heeft, zodat de trailer die
+            -- nu laadt de juiste waarde krijgt in plaats van de gedeelde,
+            -- mogelijk-van-een-ander-vak-afkomstige MoistureSystem-waarde.
+            if RealSiloMoistureCompat ~= nil
+                    and RealSiloMoistureCompat.recordStorageWithdrawal ~= nil then
+                RealSiloMoistureCompat.recordStorageWithdrawal(uid, active, fillType)
+            end
+
             self._realSiloApplying = true
             originalSetFillLevel(self, math.max(realCurrentBefore - totalDrained, 0), fillType, fillInfo)
             self._realSiloApplying = false

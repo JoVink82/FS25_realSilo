@@ -310,6 +310,35 @@ function RealSiloMoistureCompat.recordStorageDeposit(uid, slot, fillType, oldLev
     end
 end
 
+-- ----------------------------------------------------------------
+-- Spiegelbeeld van recordStorageDeposit, voor de ANDERE richting: een
+-- trailer die bij de silo LAADT (uit het actieve vak, dus "laden"/
+-- pickup in plaats van "storten"). MoistureSystem kent geen vakken —
+-- het bewaart één vocht/kwaliteit-waarde per (placeable, fillType),
+-- gedeeld door ALLE vakken van die silo met dat product. Zonder deze
+-- aanroep leest MoistureSystem's eigen laad-logica dus gewoon die
+-- gedeelde waarde, die van een heel ANDER (bijv. niet-gedroogd) vak
+-- kan stammen dan het vak waar deze specifieke lading daadwerkelijk
+-- uit komt (gemeld: 16% vocht/grade B in het vak, maar 14%/grade A in
+-- de trailer). Roep dit aan VLAK VOORDAT de echte storage-update
+-- gebeurt, zodat MoistureSystem's eigen laad-hook (die op hetzelfde
+-- moment vuurt) de waarde van het JUISTE vak ziet.
+-- ----------------------------------------------------------------
+function RealSiloMoistureCompat.recordStorageWithdrawal(uid, slot, fillType)
+    local ms = g_currentMission and g_currentMission.MoistureSystem
+    if ms == nil or slot == nil or slot.moisture == nil or ms.setObjectInfo == nil then
+        return
+    end
+    local data  = RealSiloCompartmentStorage.siloSlots[uid]
+    local owner = getMoistureOwner(data and data.placeable, uid)
+    if owner == nil or owner.uniqueId == nil then return end
+
+    pcall(ms.setObjectInfo, ms, owner.uniqueId, fillType, {
+        moisture = slot.moisture,
+        quality  = slot.quality
+    })
+end
+
 -- Verstuur vocht/kwaliteit eenmaal kort nadat een storting klaar is, niet
 -- iedere lossingsframe. Daardoor zien clients op een dedicated server exact
 -- dezelfde per-vakwaarden als de server zonder onnodig netwerkverkeer.
