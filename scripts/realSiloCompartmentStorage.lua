@@ -200,8 +200,19 @@ function RealSiloCompartmentStorage.saveToXML(xmlFile, key, uid)
         if slot.name ~= nil and slot.name ~= "" then
             setXMLString(xmlFile, slotKey .. "#name", slot.name)
         end
-        if slot.moisture ~= nil then setXMLFloat(xmlFile, slotKey .. "#moisture", slot.moisture) end
-        if slot.quality  ~= nil then setXMLFloat(xmlFile, slotKey .. "#quality",  slot.quality)  end
+        -- v19 -- vocht/kwaliteit NIET meer hier opslaan. RealSilo hield tot nu
+        -- toe zijn EIGEN kopie van deze waarden bij, los van FS25_MoistureSystem's
+        -- eigen tabel -- twee bronnen van waarheid die uit sync konden raken.
+        -- Gemeld: een vak toonde na een transfer permanent het percentage van
+        -- een ANDER vak, ook na een server-herstart. Oorzaak: dit RealSilo-eigen
+        -- veld werd bij laden rechtstreeks teruggezet in slot.moisture, VOORDAT
+        -- er ooit weer naar MoistureSystem's eigen (juiste) per-vak record
+        -- gekeken werd -- dus een ooit foutief opgeslagen waarde bleef voor
+        -- altijd terugkomen, ongeacht latere fixes. MoistureSystem is nu de
+        -- ENIGE bron van waarheid (elk vak heeft zijn eigen virtuele record,
+        -- zie recordStorageDeposit/getEffectiveMoistureInfo); RealSilo toont
+        -- alleen nog wat daar staat. Zie loadFromXML voor de eenmalige migratie
+        -- van reeds opgeslagen waarden uit oudere versies.
         savedCount = savedCount + 1
     end
     RealSiloDebug.print(string.format("[realSilo] %d vak(ken) opgeslagen voor %s", savedCount, uid))
@@ -229,11 +240,22 @@ function RealSiloCompartmentStorage.loadFromXML(xmlFile, key, uid)
         slot.fillType  = fillType
         slot.fillLevel = fillLevel
         slot.isActive  = (i == activeSlot)
-        -- Eigen per-vak vocht/kwaliteit (alleen aanwezig als dit vak
-        -- ooit via een droogtransfer is aangeraakt; anders blijft dit
-        -- nil en valt de UI terug op de gedeelde MoistureSystem-waarde)
-        slot.moisture  = getXMLFloat(xmlFile, slotKey .. "#moisture")
-        slot.quality   = getXMLFloat(xmlFile, slotKey .. "#quality")
+
+        -- v19 -- eenmalige migratie: oudere versies sloegen vocht/kwaliteit
+        -- hier zelf op (RealSilo's eigen kopie, zie saveToXML hierboven -- niet
+        -- meer geschreven vanaf nu). Bestaat zo'n legacy-waarde nog in deze
+        -- save EN heeft dit vak nog geen eigen MoistureSystem-record, zet 'm
+        -- dan EENMALIG over naar dat record, zodat bestaande spelers hun
+        -- percentage niet kwijtraken bij het bijwerken. Daarna is
+        -- MoistureSystem's eigen per-vak record leidend (via
+        -- getEffectiveMoistureInfo) -- slot.moisture zelf blijft hier bewust
+        -- op nil staan en wordt pas door die functie gevuld, in plaats van
+        -- een mogelijk allang verouderde waarde voor altijd te herhalen.
+        local legacyMoisture = getXMLFloat(xmlFile, slotKey .. "#moisture")
+        if legacyMoisture ~= nil and fillType ~= 0 then
+            local legacyQuality = getXMLFloat(xmlFile, slotKey .. "#quality")
+            RealSiloCompartmentStorage.migrateLegacyMoisture(uid, i, fillType, legacyMoisture, legacyQuality)
+        end
     end
 
     RealSiloDebug.print(string.format("[realSilo] Vak-verdeling geladen voor %s (actief: vak %d)", uid, activeSlot))
@@ -523,6 +545,34 @@ function RealSiloCompartmentStorage.captureAndDistribute(uid)
     end
 
     RealSiloDebug.print("[realSilo] captureAndDistribute klaar voor %s", tostring(uid))
+end
+
+-- ----------------------------------------------------------------
+-- v19 -- eenmalige migratie van RealSilo's oude, eigen vocht/kwaliteit-
+-- opslag (zie loadFromXML) naar dit vak se eigen MoistureSystem-record.
+-- Doet NIETS als dat record al bestaat (dan is MoistureSystem's eigen,
+-- mogelijk sindsdien bijgewerkte waarde leidend -- niet de oudere,
+-- mogelijk verouderde legacy-waarde) of als MoistureSystem niet actief is
+-- (dan doet vocht/kwaliteit er toch niet toe). slot.moisture zelf wordt
+-- hier BEWUST niet gezet: getEffectiveMoistureInfo vult dat vanuit het
+-- MoistureSystem-record zodra het voor het eerst nodig is.
+-- ----------------------------------------------------------------
+function RealSiloCompartmentStorage.migrateLegacyMoisture(uid, slotIndex, fillType, legacyMoisture, legacyQuality)
+    if legacyMoisture == nil then return end
+    local ms = g_currentMission and g_currentMission.MoistureSystem
+    if ms == nil or RealSiloDryerCompat == nil or RealSiloDryerCompat.buildVirtualId == nil then return end
+
+    local fillTypeName = g_fillTypeManager and g_fillTypeManager:getFillTypeNameByIndex(fillType)
+    if fillTypeName == nil then return end
+
+    local virtualId = RealSiloDryerCompat.buildVirtualId(uid, slotIndex)
+    ms.objectInfo[virtualId] = ms.objectInfo[virtualId] or {}
+    if ms.objectInfo[virtualId][fillTypeName] == nil then
+        ms.objectInfo[virtualId][fillTypeName] = { moisture = legacyMoisture, quality = legacyQuality }
+        RealSiloDebug.print(
+            "[realSilo] Legacy vocht/kwaliteit gemigreerd voor %s vak %d: moisture=%s quality=%s",
+            tostring(uid), slotIndex, tostring(legacyMoisture), tostring(legacyQuality))
+    end
 end
 
 -- ----------------------------------------------------------------

@@ -26,6 +26,7 @@ Changelog 1.2.0.5:
 - Fixed the compartment breakdown shown in the menu and world infobox getting stuck on a stale value for connected players after loading or unloading; server and clients are now kept in sync.
 - Fixed a moisture bleed where drying and then loading from one compartment could permanently overwrite the shared FS25_MoistureSystem value, making a completely different, never-dried compartment in the same silo show the wrong moisture afterwards.
 - Fixed the same bleed for the deposit direction: unloading a trailer into a compartment no longer overwrites the shared moisture value used by other compartments of the same silo.
+- Removed RealSilo's own separate copy of each compartment's moisture/quality. FS25_MoistureSystem is now the single source of truth, with every compartment keeping its own record from the moment it first receives grain; existing saved values are migrated automatically the first time this version loads them.
 
 Changelog 1.2.0.4:
 - The start/stop drying button in FS25_MoistureSystem's Grain Drying menu now also works for players connected to a dedicated server as a client, not only for the host.
@@ -84,6 +85,7 @@ Changelog v1.2.0.5:
 - Opgelost dat de vakverdeling in het menu en de wereld-infobox bij verbonden spelers bleef hangen op een verouderde waarde na laden of lossen; server en clients blijven nu gesynchroniseerd.
 - Vocht-lek opgelost waarbij drogen en daarna laden uit één vak de gedeelde FS25_MoistureSystem-waarde blijvend kon overschrijven, waardoor een heel ander, nooit-gedroogd vak in dezelfde silo daarna het verkeerde vochtpercentage toonde.
 - Hetzelfde lek opgelost voor de stort-richting: een trailer lossen in een vak overschrijft niet langer de gedeelde vochtwaarde die andere vakken van dezelfde silo gebruiken.
+- RealSilo's eigen, aparte kopie van vocht/kwaliteit per vak verwijderd. FS25_MoistureSystem is nu de enige bron van waarheid; elk vak krijgt zijn eigen record zodra het voor het eerst graan ontvangt. Al opgeslagen waarden worden bij het eerste laden met deze versie automatisch overgezet.
 
 Changelog v1.2.0.4:
 - De start/stop-knop voor drogen in het Grain Drying-menu van FS25_MoistureSystem werkt nu ook voor spelers die als client verbinden met een dedicated server, niet meer alleen voor de host.
@@ -141,6 +143,7 @@ Changelog v1.2.0.5:
 - Behoben, dass die im Menü und in der Welt-Infobox angezeigte Fachverteilung bei verbundenen Spielern nach dem Laden oder Entladen auf einem veralteten Wert hängen blieb; Server und Clients bleiben jetzt synchron.
 - Feuchtigkeitsleck behoben, bei dem Trocknen und anschließendes Laden aus einem Fach den gemeinsamen FS25_MoistureSystem-Wert dauerhaft überschreiben konnte, wodurch ein völlig anderes, nie getrocknetes Fach im selben Silo danach den falschen Feuchtigkeitswert anzeigte.
 - Dasselbe Leck für die Einlagerungs-Richtung behoben: Das Entladen eines Anhängers in ein Fach überschreibt nicht mehr den gemeinsamen Feuchtigkeitswert, den andere Fächer desselben Silos verwenden.
+- RealSilos eigene, separate Kopie von Feuchtigkeit/Qualität je Fach entfernt. FS25_MoistureSystem ist jetzt die einzige verbindliche Quelle; jedes Fach erhält seinen eigenen Datensatz, sobald es zum ersten Mal Getreide erhält. Bereits gespeicherte Werte werden beim ersten Laden mit dieser Version automatisch übernommen.
 
 Changelog v1.2.0.4:
 - Die Start/Stopp-Trocknen-Schaltfläche im Grain Drying-Menü von FS25_MoistureSystem funktioniert jetzt auch für Spieler, die sich als Client mit einem Dedicated Server verbinden, nicht mehr nur für den Host.
