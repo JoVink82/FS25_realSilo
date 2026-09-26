@@ -20,6 +20,9 @@ How it works:
 
 Please report problems on GitHub: https://github.com/JoVink82/FS25_realSilo
 
+Changelog 1.2.0.7:
+- Fixed all compartments of all silos showing the same moisture/quality percentage for connected players after saving and restarting the server; the server now sends each compartment's own saved value.
+
 Changelog 1.2.0.6:
 - Fixed a bug where a trailer loading from a compartment could receive the wrong moisture/quality percentage (or none at all, falling back to a default value) instead of that specific compartment's own value. Root cause: FS25_MoistureSystem reads the moisture value one call later than a previous fix assumed, so the earlier "borrow and restore" approach never actually reached it.
 - Replaced that approach with a direct compatibility patch on FS25_MoistureSystem itself, so it always sees the correct active compartment when a trailer loads, no matter which of its internal functions ends up reading the value.
@@ -84,6 +87,9 @@ Hoe het werkt:
 
 Problemen graag melden op GitHub: https://github.com/JoVink82/FS25_realSilo
 
+Changelog v1.2.0.7:
+- Opgelost dat na opslaan en herstarten van de server alle vakken van alle silo's voor verbonden spelers hetzelfde vocht-/kwaliteitspercentage toonden; de server stuurt nu de eigen opgeslagen waarde van elk vak door.
+
 Changelog v1.2.0.6:
 - Bug opgelost waarbij een trailer die uit een vak laadde het verkeerde vocht-/kwaliteitspercentage kon krijgen (of helemaal geen eigen waarde, met een standaardwaarde als terugval) in plaats van de waarde van dat specifieke vak. Oorzaak: FS25_MoistureSystem leest de vochtwaarde één aanroep later uit dan een eerdere fix veronderstelde, waardoor de vorige "lenen en terugzetten"-aanpak de waarde nooit echt bereikte.
 - Die aanpak vervangen door een directe compatibiliteitspatch op FS25_MoistureSystem zelf, zodat het altijd het juiste actieve vak ziet zodra een trailer laadt, ongeacht welke van zijn eigen functies de waarde uiteindelijk uitleest.
@@ -145,6 +151,9 @@ So funktioniert es:
 - Im Multiplayer kann nur der Admin (uber das Multiplayer-Menu eingeloggt) die Silo-Einstellungen andern. Andere Spieler konnen den Silo normal nutzen und die Facherubersicht einsehen.
 
 Bitte melden Sie Probleme unter GitHub: https://github.com/JoVink82/FS25_realSilo
+
+Changelog v1.2.0.7:
+- Behoben, dass nach dem Speichern und Neustarten des Servers alle Fächer aller Silos für verbundene Spieler denselben Feuchtigkeits-/Qualitätswert anzeigten; der Server sendet jetzt den eigenen gespeicherten Wert jedes Fachs.
 
 Changelog v1.2.0.6:
 - Fehler behoben, bei dem ein Anhänger beim Laden aus einem Fach den falschen Feuchtigkeits-/Qualitätswert erhalten konnte (oder gar keinen eigenen Wert, mit einem Standardwert als Rückfall) statt des Werts dieses konkreten Fachs. Ursache: FS25_MoistureSystem liest den Feuchtigkeitswert einen Aufruf später aus, als eine frühere Korrektur annahm, wodurch der vorherige "Leihen-und-Zurücksetzen"-Ansatz den Wert nie tatsächlich erreichte.

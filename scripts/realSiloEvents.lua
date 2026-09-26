@@ -825,12 +825,37 @@ function RealSiloSlotSyncEvent:run(connection)
     RealSiloEvents.refreshDialog(self.uid)
 end
 
+-- Ververs slot.moisture/quality op de SERVER vanuit het eigen
+-- MoistureSystem-record van dit vak ("<uid>#vak<N>") voordat we het naar
+-- clients sturen. Na een herstart van de server staat slot.moisture op nil
+-- (wordt niet meer in de realSilo-save bewaard; MoistureSystem's eigen save
+-- is leidend). Zonder deze verversing kregen clients bij het joinen nil
+-- binnen, vielen ze terug op de gedeelde silo-waarde of de standaardwaarde
+-- van MoistureSystem, en toonden ALLE vakken van ALLE silo's hetzelfde
+-- vochtpercentage.
+local function refreshSlotMoistureFromRecord(uid, index, slot)
+    if g_server == nil then return end
+    if slot.fillType == nil or slot.fillType == 0 then return end
+    local ms = g_currentMission and g_currentMission.MoistureSystem
+    if ms == nil or ms.objectInfo == nil then return end
+    if RealSiloDryerCompat == nil or RealSiloDryerCompat.buildVirtualId == nil then return end
+    local fillTypeName = g_fillTypeManager:getFillTypeNameByIndex(slot.fillType)
+    if fillTypeName == nil then return end
+    local entry = ms.objectInfo[RealSiloDryerCompat.buildVirtualId(uid, index)]
+    local info = entry and entry[fillTypeName]
+    if info ~= nil and info.moisture ~= nil then
+        slot.moisture = info.moisture
+        slot.quality  = info.quality
+    end
+end
+
 -- Bouw de slot-data op uit de lokale boekhouding (voor verzenden)
 local function buildSlotSyncData(uid)
     local data = RealSiloCompartmentStorage.siloSlots[uid]
     if not data then return nil end
     local slots = {}
-    for _, slot in ipairs(data.slots) do
+    for index, slot in ipairs(data.slots) do
+        refreshSlotMoistureFromRecord(uid, index, slot)
         -- Alle slots meesturen: zowel gewone als extension-vakken.
         -- Extension-vakken zijn op de client al aangemaakt via
         -- RealSiloExtensionSyncEvent; we updaten hier alleen de inhoud.
