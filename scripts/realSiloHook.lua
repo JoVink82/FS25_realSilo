@@ -35,56 +35,11 @@ local realSiloGlobalEventId     = nil
 local function realSiloUpdatePromptText()
     if realSiloGlobalEventId == nil or g_inputBinding == nil then return end
     local active = (realSiloActiveTriggerSilo ~= nil)
-    RealSiloDebug.print("[realSilo][DIAG] prompt zichtbaar=%s (event=%s)",
-        tostring(active), tostring(realSiloGlobalEventId))
-    pcall(function() g_inputBinding:setActionEventTextVisibility(realSiloGlobalEventId, active) end)
+    g_inputBinding:setActionEventTextVisibility(realSiloGlobalEventId, active)
     if active then
-        pcall(function()
-            g_inputBinding:setActionEventText(realSiloGlobalEventId,
-                g_i18n:getText("realSilo_configureAction") or "RealSilo")
-        end)
+        g_inputBinding:setActionEventText(realSiloGlobalEventId,
+            g_i18n:getText("realSilo_configureAction") or "RealSilo")
     end
-end
-
--- Diagnose: welke toets is er aan REALSILO_OPEN gekoppeld? Als de
--- binding leeg is, bestaat de actie wel maar heeft hij geen toets --
--- dan verschijnt er geen prompt en reageert er niets. Dat is niet uit
--- een serverlog af te leiden, vandaar deze melding bij mission-start.
-local function realSiloLogBinding()
-    if g_inputBinding == nil then
-        RealSiloDebug.print("[realSilo][DIAG] binding: g_inputBinding niet beschikbaar")
-        return
-    end
-    if InputAction.REALSILO_OPEN == nil then
-        RealSiloDebug.print("[realSilo][DIAG] binding: InputAction.REALSILO_OPEN BESTAAT NIET")
-        return
-    end
-
-    local shown = false
-    -- Meerdere API-varianten proberen; welke bestaat verschilt per versie.
-    for _, fn in ipairs({ "getDisplayKeyNamesForActionString",
-                          "getDisplayKeyNamesForAction",
-                          "getButtonsForActionName" }) do
-        if not shown and g_inputBinding[fn] ~= nil then
-            local ok, res = pcall(function()
-                return g_inputBinding[fn](g_inputBinding, InputAction.REALSILO_OPEN)
-            end)
-            if ok and res ~= nil and tostring(res) ~= "" then
-                RealSiloDebug.print("[realSilo][DIAG] binding REALSILO_OPEN (%s): %s",
-                    fn, tostring(res))
-                shown = true
-            end
-        end
-    end
-    if not shown then
-        RealSiloDebug.print("[realSilo][DIAG] binding REALSILO_OPEN: GEEN toets gevonden (actie bestaat wel)")
-    end
-end
-
-if Mission00 ~= nil and Mission00.onStartMission ~= nil then
-    Mission00.onStartMission = Utils.appendedFunction(Mission00.onStartMission, function()
-        realSiloLogBinding()
-    end)
 end
 
 local function realSiloEnsureGlobalEvent()
@@ -92,7 +47,9 @@ local function realSiloEnsureGlobalEvent()
         -- Hetzelfde event gedurende de hele missie hergebruiken. Herhaald
         -- verwijderen en opnieuw registreren kan een zichtbare maar niet
         -- meer reagerende F1-actie achterlaten.
-        pcall(function() g_inputBinding:setActionEventActive(realSiloGlobalEventId, true) end)
+        if g_inputBinding ~= nil then
+            g_inputBinding:setActionEventActive(realSiloGlobalEventId, true)
+        end
         return
     end
     if g_inputBinding == nil or InputAction.REALSILO_OPEN == nil then return end
@@ -107,7 +64,6 @@ local function realSiloEnsureGlobalEvent()
         end,
         false, true, false, true)
     realSiloGlobalEventId = eventId
-    RealSiloDebug.print("[realSilo][DIAG] open-toets event geregistreerd: id=%s", tostring(eventId))
 end
 
 -- Buiten alle silo-triggers blijft het ene event bestaan, maar wordt het
@@ -115,8 +71,8 @@ end
 -- geldige registratie bij een volgende onEnter weer worden gebruikt.
 local function realSiloRemoveGlobalEvent()
     if realSiloGlobalEventId ~= nil and g_inputBinding ~= nil then
-        pcall(function() g_inputBinding:setActionEventTextVisibility(realSiloGlobalEventId, false) end)
-        pcall(function() g_inputBinding:setActionEventActive(realSiloGlobalEventId, false) end)
+        g_inputBinding:setActionEventTextVisibility(realSiloGlobalEventId, false)
+        g_inputBinding:setActionEventActive(realSiloGlobalEventId, false)
     end
 end
 
@@ -164,10 +120,6 @@ end
 -- Speler betreedt de trigger van een eigen silo.
 local function realSiloRegisterInProximity(self, triggerId, isEnter)
     if triggerId == nil then return end
-    if isEnter then
-        RealSiloDebug.print("[realSilo][DIAG] trigger BINNEN bij uid=%s triggerId=%s",
-            tostring(self.realSiloUniqueId), tostring(triggerId))
-    end
     local triggers = realSiloEnteredSet[self]
     if triggers == nil then
         triggers = {}
@@ -263,9 +215,6 @@ if Placeable ~= nil and Placeable.getName ~= nil then
         end
         return originalPlaceableGetName(self, ...)
     end
-    RealSiloDebug.print("[realSilo] Placeable:getName() gepatcht voor aangepaste silo-namen (infobox/shop/andere mods)")
-else
-    RealSiloDebug.print("[realSilo][DIAG] WAARSCHUWING: Placeable of Placeable.getName niet gevonden, naam-patch niet geïnstalleerd")
 end
 
 -- ================================================================
@@ -314,7 +263,6 @@ local function saveAllSiloData()
     RealSiloExtensionManager.saveToXML(xmlFile)
     saveXMLFile(xmlFile)
     delete(xmlFile)
-    RealSiloDebug.print(string.format("[realSilo] %d silo('s) opgeslagen", idx))
 end
 
 local function loadAllSiloData()
@@ -360,7 +308,6 @@ local function loadAllSiloData()
     -- Laad extension-data in pendingSaved (geen koppeling hier)
     RealSiloExtensionManager.loadFromXML(xmlFile)
     data._xmlFile = xmlFile
-    RealSiloDebug.print(string.format("[realSilo] %d silo('s) geladen", i))
     return data
 end
 
@@ -402,11 +349,8 @@ local function findNearestRealSilo(extPlaceable)
         end
     end
     if bestDist < bestRange then
-        RealSiloDebug.print("[realSilo] Extension gekoppeld: afstand %.1f m (bereik %d m)", bestDist, bestRange)
         return bestUid, bestDist
     end
-    RealSiloDebug.print("[realSilo] Extension NIET gekoppeld: dichtstbijzijnde silo %.1f m (bereik %d m)",
-        bestDist, bestRange)
     return nil, nil
 end
 
@@ -456,9 +400,6 @@ function RealSiloHookRescanExtensions(uid)
             end
         end
     end
-    if linked > 0 then
-        RealSiloDebug.print("[realSilo] Herscan: %d extension(s) alsnog gekoppeld aan %s", linked, tostring(uid))
-    end
 end
 
 
@@ -499,8 +440,6 @@ PlaceableSilo.onLoad = function(self, savegame)
     local specReady = self.spec_silo ~= nil and self.spec_silo.storages ~= nil
     if specReady and not RealSiloUtil.isFarmSiloPlaceableSilo(self) then
         self._realSiloIgnored = true
-        RealSiloDebug.print("[realSilo][DIAG] onLoad: silo genegeerd (geen farmSilo-fillType) - %s",
-            tostring(self.configFileName))
         return
     end
 
@@ -512,8 +451,6 @@ PlaceableSilo.onLoad = function(self, savegame)
         math.floor(x+0.5), math.floor(y+0.5), math.floor(z+0.5))
     self.realSiloUniqueId    = uid
     self.realSiloActivatable = RealSiloActivatable.new(self)
-    RealSiloDebug.print("[realSilo][DIAG] onLoad: silo geregistreerd, uid=%s configFile=%s",
-        tostring(uid), tostring(self.configFileName))
 
     -- v6: extra, onafhankelijke trigger voor de MoistureSystem-
     -- compatibiliteitslaag, NAAST de bestaande Mission00.onStartMission-
@@ -524,10 +461,10 @@ PlaceableSilo.onLoad = function(self, savegame)
     -- routes zijn idempotent (tryInstall stopt vanzelf zodra het gelukt is),
     -- dus dit kan nooit iets dubbel installeren.
     if RealSiloMoistureCompat ~= nil and RealSiloMoistureCompat.tryInstall ~= nil then
-        pcall(RealSiloMoistureCompat.tryInstall)
+        RealSiloMoistureCompat.tryInstall()
     end
     if RealSiloDryerCompat ~= nil and RealSiloDryerCompat.tryInstall ~= nil then
-        pcall(RealSiloDryerCompat.tryInstall)
+        RealSiloDryerCompat.tryInstall()
     end
 
     -- Lees optionele realSilo definitie uit de silo XML
@@ -537,7 +474,6 @@ PlaceableSilo.onLoad = function(self, savegame)
         if rawXml and rawXml ~= 0 then
             local rsKey    = "placeable.realSilo"
             local numComps = getXMLInt(rawXml, rsKey .. "#compartments")
-            RealSiloDebug.print(string.format("[realSilo] realSilo tag numComps: %s", tostring(numComps)))
             if numComps then
                 local slotCaps     = {}
                 local i            = 0
@@ -609,7 +545,6 @@ PlaceableSilo.onLoad = function(self, savegame)
         local silo = realSiloManager.getSilo(uid)
         if silo then silo.config.transferRate = cfg.transferRate end
     end
-    RealSiloDebug.print(string.format("[realSilo] onLoad: %s", uid))
 end
 
 -- ================================================================
@@ -755,7 +690,6 @@ PlaceableSilo.onFinalizePlacement = function(self)
         --  het action-event te vroeg aanmaken -- dan werkt de toets
         --  niet en verschijnt hij ook niet in het F1-overzicht.)
 
-        RealSiloDebug.print(string.format("[realSilo] onFinalizePlacement OK: %s", uid))
     end
 end
 
@@ -786,23 +720,8 @@ end
 -- spel en andere mods).
 -- ================================================================
 local originalPlayerTrigger = PlaceableSilo.onPlayerActionTriggerCallback
-RealSiloDebug.print("[realSilo][DIAG] hook-check: PlaceableSilo.onPlayerActionTriggerCallback bestaat=%s",
-    tostring(originalPlayerTrigger ~= nil))
 PlaceableSilo.onPlayerActionTriggerCallback = function(self, triggerId, otherId, onEnter, onLeave, onStay)
     originalPlayerTrigger(self, triggerId, otherId, onEnter, onLeave, onStay)
-    -- Diagnose: welke voorwaarde blokkeert? In een clientlog bleek deze
-    -- callback nooit tot registratie te komen (geen enkele "trigger BINNEN"),
-    -- waardoor de open-toets nooit werd aangemaakt.
-    if RealSiloDebug and RealSiloDebug.enabled then
-        RealSiloDebug.print(
-            "[realSilo][DIAG] playerTrigger: activatable=%s localPlayer=%s otherIdMatch=%s ownerFarm=%s spelerFarm=%s onEnter=%s",
-            tostring(self.realSiloActivatable ~= nil),
-            tostring(g_localPlayer ~= nil),
-            tostring(g_localPlayer ~= nil and otherId == g_localPlayer.rootNode),
-            tostring(self.getOwnerFarmId and self:getOwnerFarmId()),
-            tostring(g_currentMission and g_currentMission:getFarmId()),
-            tostring(onEnter))
-    end
     if not self.realSiloActivatable then return end
     if not (g_localPlayer and otherId == g_localPlayer.rootNode) then return end
     if self:getOwnerFarmId() ~= g_currentMission:getFarmId() then return end
@@ -816,20 +735,8 @@ PlaceableSilo.onPlayerActionTriggerCallback = function(self, triggerId, otherId,
 end
 
 local originalInfoTrigger = PlaceableInfoTrigger.onInfoTriggerCallback
-RealSiloDebug.print("[realSilo][DIAG] hook-check: PlaceableInfoTrigger.onInfoTriggerCallback bestaat=%s",
-    tostring(originalInfoTrigger ~= nil))
 PlaceableInfoTrigger.onInfoTriggerCallback = function(self, triggerId, otherId, onEnter, onLeave, onStay)
     originalInfoTrigger(self, triggerId, otherId, onEnter, onLeave, onStay)
-    if RealSiloDebug and RealSiloDebug.enabled then
-        RealSiloDebug.print(
-            "[realSilo][DIAG] infoTrigger: activatable=%s localPlayer=%s otherIdMatch=%s ownerFarm=%s spelerFarm=%s onEnter=%s",
-            tostring(self.realSiloActivatable ~= nil),
-            tostring(g_localPlayer ~= nil),
-            tostring(g_localPlayer ~= nil and otherId == g_localPlayer.rootNode),
-            tostring(self.getOwnerFarmId and self:getOwnerFarmId()),
-            tostring(g_currentMission and g_currentMission:getFarmId()),
-            tostring(onEnter))
-    end
     if not self.realSiloActivatable then return end
     if not (g_localPlayer and otherId == g_localPlayer.rootNode) then return end
     if self:getOwnerFarmId() ~= g_currentMission:getFarmId() then return end
@@ -880,7 +787,6 @@ FSBaseMission.update = Utils.appendedFunction(FSBaseMission.update, function(sel
     realSiloReleaseKeyIfPlayerGone(dt)
 end)
 
-RealSiloDebug.print("[realSilo] PlaceableSilo hooks geïnstalleerd (v9 - schoon extension-herstel)")
 
 -- ================================================================
 -- SiloExtension koppeling
@@ -966,7 +872,6 @@ PlaceableSiloExtension.onFinalizePlacement = function(self)
     -- Nieuw geplaatst: positie-check
     local uid, dist = findNearestRealSilo(self)
     if not uid then
-        RealSiloDebug.print("[realSilo] SiloExtension: geen nabije realSilo gevonden")
         return
     end
     extensionToSilo[self] = uid
@@ -983,7 +888,6 @@ PlaceableSiloExtension.onDelete = function(self)
     originalExtDelete(self)
 end
 
-RealSiloDebug.print("[realSilo] SiloExtension hooks geïnstalleerd")
 
 -- ================================================================
 -- Infobox: compartimentinfo via InfoDisplayKeyValueBox.addLine
@@ -1017,7 +921,6 @@ local COLOR_ACTIVE = { 0.204, 0.827, 0.169, 1.0 }
 -- Hook InfoDisplayKeyValueBox na mission start (klasse is dan beschikbaar)
 Mission00.onStartMission = Utils.appendedFunction(Mission00.onStartMission, function()
     if InfoDisplayKeyValueBox == nil then
-        RealSiloDebug.print("[realSilo] WAARSCHUWING: InfoDisplayKeyValueBox niet gevonden")
         return
     end
 
@@ -1085,5 +988,70 @@ Mission00.onStartMission = Utils.appendedFunction(Mission00.onStartMission, func
         _origAddLine(self, key, value, accentuate, accentuateColor)
     end
 
-    RealSiloDebug.print("[realSilo] Infobox hook: addLine (met actief-vak kleur + totaalregel onderdrukt)")
 end)
+
+-- ================================================================
+-- Financiën-/prijzenoverzicht (ESC-menu > Economy > Prices-tabblad):
+-- laat het ECHTE totaal van een door realSilo beheerde silo zien in
+-- plaats van alleen het actieve vak.
+--
+-- Giants' InGameMenuStatisticsFrame.getStorageFillLevel (scripts/gui/
+-- InGameMenuStatisticsFrame.lua, gedecompileerd geverifieerd) telt voor
+-- een gewas storage:getFillLevel()/:getCapacity() op over ALLE storages
+-- van de boerderij die dat gewas ondersteunen. Onze eigen
+-- Storage.getFillLevel/getCapacity-hooks (realSiloStorageHook.lua) geven
+-- voor een geconfigureerde silo altijd alleen het ACTIEVE vak terug --
+-- nodig voor laad/lostriggers, zie CLAUDE.md valkuil 1 -- dus dit scherm
+-- zag tot nu toe altijd maar één vak in plaats van de hele silo.
+--
+-- Bewuste keuze: de hele functie hier zelf herbouwen (i.p.v. het
+-- origineel aanroepen en het resultaat achteraf proberen te corrigeren)
+-- omdat we voor elke storage zelf willen bepalen of hij door realSilo
+-- beheerd wordt en zo ja de eigen boekhouding gebruiken; bij een
+-- toekomstige game-update hierop controleren tegen de dan geldende
+-- Giants-bron.
+-- ================================================================
+local originalGetStorageFillLevel = InGameMenuStatisticsFrame.getStorageFillLevel
+InGameMenuStatisticsFrame.getStorageFillLevel = function(self, fillType, farmSilo, usedStorages)
+    -- Geen enkele storage ooit door realSilo gekoppeld (mod ongebruikt op
+    -- deze map, of nog geen enkele silo geconfigureerd): exact het
+    -- originele gedrag, geen eigen logica nodig.
+    if realSiloStorageLink == nil or next(realSiloStorageLink) == nil then
+        return originalGetStorageFillLevel(self, fillType, farmSilo, usedStorages)
+    end
+
+    local totalCapacity = 0
+    local usedCapacity  = 0
+    local mission = g_currentMission
+    local farmId  = mission:getFarmId()
+
+    for _, storage in pairs(mission.storageSystem:getStorages()) do
+        if usedStorages[storage] == nil and storage:getOwnerFarmId() == farmId
+                and storage.foreignSilo ~= farmSilo
+                and storage:getIsFillTypeSupported(fillType.index) then
+            usedStorages[storage] = true
+
+            local uid  = realSiloStorageLink and realSiloStorageLink[storage]
+            local data = uid and RealSiloCompartmentStorage.siloSlots[uid]
+            if data and realSiloManager.isConfigured(uid) then
+                for _, slot in ipairs(data.slots) do
+                    if slot.storage == storage then
+                        if slot.fillType == fillType.index then
+                            usedCapacity = usedCapacity + (slot.fillLevel or 0)
+                        end
+                        totalCapacity = totalCapacity + (slot.capacity or 0)
+                    end
+                end
+            else
+                usedCapacity  = usedCapacity + storage:getFillLevel(fillType.index)
+                totalCapacity = totalCapacity + storage:getCapacity(fillType.index)
+            end
+        end
+    end
+
+    if totalCapacity > 0 then
+        return usedCapacity, totalCapacity
+    end
+    return -1, -1
+end
+

@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8" standalone="no"?>
-<modDesc descVersion="111">
+<modDesc descVersion="113">
     <author>Jo_Vink</author>
-    <version>1.2.0.5</version>
+    <version>1.2.0.7</version>
     <title>
         <en>RealSilo – Realistic Silo Compartments</en>
         <nl>RealSilo – Realistische Silo Compartimenten</nl>
@@ -19,6 +19,11 @@ How it works:
 - In multiplayer only the admin (logged in via the multiplayer menu) can change the silo settings. Other players can use the silo normally and view the compartment overview.
 
 Please report problems on GitHub: https://github.com/JoVink82/FS25_realSilo
+
+Changelog 1.2.0.6:
+- Fixed a bug where a trailer loading from a compartment could receive the wrong moisture/quality percentage (or none at all, falling back to a default value) instead of that specific compartment's own value. Root cause: FS25_MoistureSystem reads the moisture value one call later than a previous fix assumed, so the earlier "borrow and restore" approach never actually reached it.
+- Replaced that approach with a direct compatibility patch on FS25_MoistureSystem itself, so it always sees the correct active compartment when a trailer loads, no matter which of its internal functions ends up reading the value.
+- Fixed the Economy > Prices overview only counting the active compartment of a configured silo instead of its full contents and capacity.
 
 Changelog 1.2.0.5:
 - Fixed a serious bug where loading grain from a compartment into a trailer removed far more than the trailer actually received, causing product to vanish, when another compartment held the same crop.
@@ -79,6 +84,11 @@ Hoe het werkt:
 
 Problemen graag melden op GitHub: https://github.com/JoVink82/FS25_realSilo
 
+Changelog v1.2.0.6:
+- Bug opgelost waarbij een trailer die uit een vak laadde het verkeerde vocht-/kwaliteitspercentage kon krijgen (of helemaal geen eigen waarde, met een standaardwaarde als terugval) in plaats van de waarde van dat specifieke vak. Oorzaak: FS25_MoistureSystem leest de vochtwaarde één aanroep later uit dan een eerdere fix veronderstelde, waardoor de vorige "lenen en terugzetten"-aanpak de waarde nooit echt bereikte.
+- Die aanpak vervangen door een directe compatibiliteitspatch op FS25_MoistureSystem zelf, zodat het altijd het juiste actieve vak ziet zodra een trailer laadt, ongeacht welke van zijn eigen functies de waarde uiteindelijk uitleest.
+- Opgelost dat het Economy > Prices-overzicht van een geconfigureerde silo alleen het actieve vak meetelde in plaats van de volledige inhoud en capaciteit.
+
 Changelog v1.2.0.5:
 - Ernstige bug opgelost waarbij het laden van graan uit een vak in een trailer véél meer verwijderde dan de trailer daadwerkelijk kreeg, waardoor product verdween als een ander vak hetzelfde gewas bevatte.
 - Het getoonde vocht-/kwaliteitspercentage bij het laden vanuit een gedroogd vak in een trailer opgelost; dit komt nu overeen met de waarde van dat vak zelf in plaats van die van een ander vak.
@@ -136,6 +146,10 @@ So funktioniert es:
 
 Bitte melden Sie Probleme unter GitHub: https://github.com/JoVink82/FS25_realSilo
 
+Changelog v1.2.0.6:
+- Fehler behoben, bei dem ein Anhänger beim Laden aus einem Fach den falschen Feuchtigkeits-/Qualitätswert erhalten konnte (oder gar keinen eigenen Wert, mit einem Standardwert als Rückfall) statt des Werts dieses konkreten Fachs. Ursache: FS25_MoistureSystem liest den Feuchtigkeitswert einen Aufruf später aus, als eine frühere Korrektur annahm, wodurch der vorherige "Leihen-und-Zurücksetzen"-Ansatz den Wert nie tatsächlich erreichte.
+- Diesen Ansatz durch eine direkte Kompatibilitätskorrektur an FS25_MoistureSystem selbst ersetzt, sodass es beim Laden eines Anhängers immer das richtige aktive Fach sieht, unabhängig davon, welche seiner eigenen Funktionen den Wert letztlich ausliest.
+- Behoben, dass die Übersicht Economy > Prices bei einem konfigurierten Silo nur das aktive Fach statt des gesamten Inhalts und der gesamten Kapazität zählte.
 
 Changelog v1.2.0.5:
 - Schwerwiegenden Fehler behoben, bei dem das Laden von Getreide aus einem Fach in einen Anhänger weit mehr entfernte, als der Anhänger tatsächlich erhielt, wodurch Ware verschwand, wenn ein anderes Fach dieselbe Frucht enthielt.
@@ -209,7 +223,6 @@ Changelog v1.1.0.1:
     </inputBinding>
 
     <extraSourceFiles>
-        <sourceFile filename="scripts/RealSiloDebug.lua" />
         <sourceFile filename="scripts/RealSiloUtil.lua" />
         <sourceFile filename="scripts/realSiloManager.lua" />
         <sourceFile filename="scripts/realSiloCompartmentStorage.lua" />

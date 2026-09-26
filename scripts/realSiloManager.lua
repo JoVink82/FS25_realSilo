@@ -54,15 +54,12 @@ function realSiloManager.register(placeable, savedId, savedConfig)
         placeable = placeable,
         config = cfg,
     }
-    RealSiloDebug.print(string.format("[realSilo] Geregistreerd: %s | %d vak(ken) x %d L",
-        uniqueId, cfg.numCompartments, cfg.capacityPerCompartment))
     return uniqueId
 end
 
 function realSiloManager.unregister(uniqueId)
     if uniqueId then
         realSiloManager.silos[uniqueId] = nil
-        RealSiloDebug.print("[realSilo] Verwijderd: " .. uniqueId)
     end
 end
 
@@ -151,45 +148,7 @@ function realSiloManager.applyConfig(uniqueId, newNum, newCap)
 
     silo.config.numCompartments        = newNum
     silo.config.capacityPerCompartment = newCap
-    RealSiloDebug.print(string.format("[realSilo] Config: %s → %d x %d L", uniqueId, newNum, newCap))
     return true
-end
-
--- Console helpers
-function realSilo_setConfig(num, cap, uid)
-    local id = uid
-    if not id then
-        for k, _ in pairs(realSiloManager.silos) do id = k; break end
-    end
-    if not id then RealSiloDebug.print("[realSilo] Geen silo gevonden"); return end
-    local ok, err = realSiloManager.applyConfig(id, num, cap)
-    if ok then
-        local s = realSiloManager.getSilo(id)
-        RealSiloDebug.print(string.format("[realSilo] OK: %d x %d L  (%s)", s.config.numCompartments, s.config.capacityPerCompartment, id))
-    else
-        RealSiloDebug.print("[realSilo] Fout: " .. tostring(err))
-    end
-end
-
-function realSilo_list()
-    local n = 0
-    for id, silo in pairs(realSiloManager.silos) do
-        n = n + 1
-        RealSiloDebug.print(string.format("[realSilo] %s  %dx%dL", id, silo.config.numCompartments, silo.config.capacityPerCompartment))
-        local data = RealSiloCompartmentStorage.siloSlots[id]
-        if data then
-            for i, slot in ipairs(data.slots) do
-                local prod = "leeg"
-                if slot.fillType ~= 0 then
-                    local d = g_fillTypeManager:getFillTypeByIndex(slot.fillType)
-                    prod = d and (d.title or d.name) or tostring(slot.fillType)
-                end
-                RealSiloDebug.print(string.format("  [%d] %-18s %7.0f/%7.0f L%s", i, prod, slot.fillLevel, slot.capacity,
-                    slot.isExtension and " [ext]" or ""))
-            end
-        end
-    end
-    if n == 0 then RealSiloDebug.print("[realSilo] Geen silo's") end
 end
 
 -- ============================================================
@@ -271,8 +230,6 @@ function realSiloManager.startTransfer(uid, fromSlot, toSlot, ratePerMin)
         syncTimer    = 1000, -- direct broadcasten op eerste frame
         syncInterval = 1000, -- broadcast elke seconde
     }
-    RealSiloDebug.print(string.format("[realSilo] Transfer gestart: %s vak %d → vak %d @ %d L/min",
-        uid, fromSlot, toSlot, ratePerMin or 1000))
     return true
 end
 
@@ -280,7 +237,6 @@ function realSiloManager.stopTransfer(uid)
     if realSiloManager.transfers[uid] then
         realSiloManager.transfers[uid].active = false
         realSiloManager.transfers[uid] = nil
-        RealSiloDebug.print(string.format("[realSilo] Transfer gestopt: %s", uid))
     end
 end
 
@@ -306,13 +262,11 @@ realSiloManager.dryingTransfers = {}  -- [uid] = { fromSlot, toSlot }
 
 function realSiloManager.startDryingTransfer(uid, fromSlot, toSlot)
     realSiloManager.dryingTransfers[uid] = { fromSlot = fromSlot, toSlot = toSlot }
-    RealSiloDebug.print(string.format("[realSilo] Droogtransfer gestart: %s vak %d -> vak %d", uid, fromSlot, toSlot))
 end
 
 function realSiloManager.stopDryingTransfer(uid)
     if realSiloManager.dryingTransfers[uid] then
         realSiloManager.dryingTransfers[uid] = nil
-        RealSiloDebug.print(string.format("[realSilo] Droogtransfer gestopt: %s", uid))
     end
 end
 
@@ -380,7 +334,6 @@ function realSiloManager.updateTransfers(dt)
             if moved <= 0 then
                 realSiloManager.transfers[uid] = nil
                 RealSiloEvents.broadcastSlotSync(uid)
-                RealSiloDebug.print(string.format("[realSilo] Transfer gestopt/klaar: %s", uid))
             else
                 -- Periodieke broadcast zodat clients de voortgang zien
                 transfer.syncTimer = transfer.syncTimer + dt
@@ -393,4 +346,3 @@ function realSiloManager.updateTransfers(dt)
     end
 end
 
-RealSiloDebug.print("[realSilo] realSiloManager (boekhoud-versie) geladen")

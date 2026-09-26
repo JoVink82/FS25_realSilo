@@ -39,7 +39,6 @@ het WARE totaal; de boekhouding zegt alleen hoe dat verdeeld is.
 
 | Bestand | Rol |
 |---|---|
-| `RealSiloDebug.lua` | Debug-schakelaar. Alle logging loopt via `RealSiloDebug.print()` en is stil tenzij de companion-mod `FS25_RealSilo_Debug` geïnstalleerd is. Detectie via `g_modIsLoaded` / `g_modManager`. |
 | `RealSiloUtil.lua` | Silo-herkenning (`isFarmSiloStorage`) en rechten (`canManageSilo` / `canManageSiloLocal`). |
 | `realSiloManager.lua` | Silo-registratie, config, transfersysteem. |
 | `realSiloCompartmentStorage.lua` | De boekhouding: vakken, save/load, transfer, `captureAndDistribute`. |
@@ -323,9 +322,8 @@ vereenvoudigde oplossing: geen pogingen-cap, geen omgevingsdetectie, gewoon
 altijd `installToggleGuiPatch()` blijven proberen.** Lukt het (speler opent
 het menu) dan is het klaar; lukt het nooit (headless server, of gewoon geen
 speler die dit menu ooit opent) dan blijft het onschadelijk op de
-achtergrond proberen voor de rest van de sessie. RealSiloDebug.print is
-sowieso stil zonder de companion-debugmod, dus ook geen logspam in een
-normale (niet-diagnostische) sessie. **Bredere les: als een "geef op na X
+achtergrond proberen voor de rest van de sessie (zonder logregels).
+**Bredere les: als een "geef op na X
 pogingen"-vangnet nodig lijkt, eerst checken of de mislukte poging zelf wel
 daadwerkelijk schade aanricht (CPU, geheugen, groeiende state, logspam in
 productie) -- zo niet, dan is "gewoon oneindig blijven proberen" vaak
@@ -517,9 +515,14 @@ zojuist gefixte sync stilletjes weer ongedaan maken.**
 
 ## Testen
 
-Zonder de companion-mod logt de mod niets. Voor diagnose:
-installeer `FS25_RealSilo_Debug` ernaast (losse zip, met eigen
-`iconFilename` — zonder icon weigert FS25 de mod te laden).
+Sinds 1.2.0.7 bevat de mod GEEN logging meer (ook geen `RealSiloDebug`
+en geen companion-debugmod). Giants keurt bij de ModHub-certificering
+elke `pcall`/`xpcall` af ("swallows errors and hides them from the log"),
+en `descVersion` moet 113 zijn. Regels:
+- Nooit `pcall`/`xpcall` gebruiken; `grep -rn pcall scripts/` moet leeg zijn.
+- Diagnose-logging alleen tijdelijk in een testversie en vóór een
+  ModHub-inzending weer verwijderen.
+- Fouten verschijnen nu gewoon als Lua-fout in `log.txt`.
 
 Bij problemen met laden/lossen is het log leidend: kijk welke functies het
 spel daadwerkelijk aanroept voordat je een hook kiest. Zo bleek dat de

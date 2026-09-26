@@ -86,8 +86,8 @@ local function getMoistureOwner(placeable, uid)
     local ms = g_currentMission and g_currentMission.MoistureSystem
     if ms ~= nil and placeable ~= nil and placeable.spec_siloExtension ~= nil
             and ms.getParentSiloForExtension ~= nil then
-        local ok, parent = pcall(ms.getParentSiloForExtension, ms, placeable)
-        if ok and parent ~= nil and parent.uniqueId ~= nil then
+        local parent = ms:getParentSiloForExtension(placeable)
+        if parent ~= nil and parent.uniqueId ~= nil then
             return parent
         end
     end
@@ -146,7 +146,6 @@ local function installHasFillTypePatch()
         return originalHasFillType(self, uniqueId, fillType)
     end
 
-    RealSiloDebug.print("[realSilo] MoistureSystem-compatibiliteit actief (hasFillType kijkt nu naar alle vakken)")
     return true
 end
 
@@ -175,13 +174,11 @@ function RealSiloMoistureCompat.getCompartmentLabel(placeable, fillType, slot, u
     if slot ~= nil and RealSiloCompartmentStorage ~= nil then
         info = RealSiloCompartmentStorage.getEffectiveMoistureInfo(placeable, slot, uid, slotIndex)
     else
-        local ok, msInfo = pcall(function() return ms:getObjectInfo(placeable.uniqueId, fillType) end)
-        if ok then info = msInfo end
+        if ms.getObjectInfo ~= nil and ms.objectInfo ~= nil then
+            info = ms:getObjectInfo(placeable.uniqueId, fillType)
+        end
     end
     if info == nil or info.moisture == nil then
-        RealSiloDebug.print(
-            "[realSilo][DIAG] getCompartmentLabel: geen moisture-info | uid=%s fillType=%s info=%s",
-            tostring(placeable.uniqueId), tostring(fillType), tostring(info))
         return ""
     end
 
@@ -212,10 +209,6 @@ function RealSiloMoistureCompat.getCompartmentLabel(placeable, fillType, slot, u
     local gradeLabel = ""
     if info.quality ~= nil then
         gradeLabel = qualityToGradeLetter(info.quality) .. " \xC2\xB7 "
-    else
-        RealSiloDebug.print(
-            "[realSilo][DIAG] getCompartmentLabel: quality ontbreekt | fillType=%s",
-            tostring(fillType))
     end
 
     return string.format("  |  %s%.1f%%", gradeLabel, moisturePct)
@@ -243,9 +236,8 @@ local function installUnloadMoistureHook()
             sourceId = sourceObject.uniqueId
         end
         local sourceInfo = nil
-        if ms ~= nil and sourceId ~= nil then
-            local ok, info = pcall(ms.getObjectInfo, ms, sourceId, fillTypeIndex)
-            if ok then sourceInfo = info end
+        if ms ~= nil and sourceId ~= nil and ms.getObjectInfo ~= nil and ms.objectInfo ~= nil then
+            sourceInfo = ms:getObjectInfo(sourceId, fillTypeIndex)
         end
 
         local parentDeposit = RealSiloMoistureCompat.activeDeposit
@@ -341,67 +333,97 @@ function RealSiloMoistureCompat.recordStorageDeposit(uid, slot, fillType, oldLev
 end
 
 -- ----------------------------------------------------------------
--- Spiegelbeeld van recordStorageDeposit, voor de ANDERE richting: een
--- trailer die bij de silo LAADT (uit het actieve vak, dus "laden"/
--- pickup in plaats van "storten"). MoistureSystem kent geen vakken —
+-- Trailer die bij de silo LAADT (uit het actieve vak, dus "laden"/
+-- pickup in plaats van "storten"). MoistureSystem kent geen vakken --
 -- het bewaart één vocht/kwaliteit-waarde per (placeable, fillType),
--- gedeeld door ALLE vakken van die silo met dat product. Zonder deze
--- aanroep leest MoistureSystem's eigen laad-logica dus gewoon die
--- gedeelde waarde, die van een heel ANDER (bijv. niet-gedroogd) vak
--- kan stammen dan het vak waar deze specifieke lading daadwerkelijk
--- uit komt (gemeld: 16% vocht/grade B in het vak, maar 14%/grade A in
--- de trailer).
+-- gedeeld door ALLE vakken van die silo met dat product. Zonder
+-- correctie leest MoistureSystem's eigen laad-logica dus gewoon die
+-- gedeelde waarde, die van een heel ANDER (bijv. niet-gedroogd) vak kan
+-- stammen dan het vak waar deze specifieke lading daadwerkelijk uit
+-- komt (gemeld: 16% vocht/grade B in het vak, maar 14%/grade A in de
+-- trailer).
 --
--- BUGFIX: de EERSTE versie hiervan schreef permanent naar de gedeelde
--- waarde. Daardoor "besmette" het laden uit een gedroogd vak (bv. vak 3,
--- 15.3%) de gedeelde waarde die ANDERE, nooit-gedroogde vakken zonder
--- eigen record (bv. vak 2, 18%) gebruiken om hun EIGEN vochtpercentage
--- te tonen -- gemeld: na het laden uit vak 3 en daarna transferen van
--- vak 2 naar vak 3, toonden BEIDE vakken 15.3% in plaats van dat vak 2's
--- 18% behouden bleef. Vandaar nu een tijdelijke set-en-herstel: de
--- gedeelde waarde wordt hier VLAK VOOR de echte storage-update naar het
--- juiste (actieve) vak gezet -- zodat MoistureSystem's eigen laad-hook,
--- die synchroon binnen dezelfde aanroep vuurt, de juiste waarde ziet --
--- en direct daarna weer teruggezet naar wat het was, via
--- restoreSharedMoistureInfo (aangeroepen door de storage-hook meteen na
--- originalSetFillLevel), zodat andere vakken niet blijvend geraakt worden.
+-- EERDERE AANPAK (verwijderd, werkte niet): tijdelijk de gedeelde
+-- MoistureSystem-waarde naar het actieve vak zetten vlak vóór de echte
+-- storage-update, en meteen daarna weer terugzetten -- in de
+-- veronderstelling dat MoistureSystem's eigen laad-hook "synchroon
+-- binnen dezelfde aanroep" zou lezen. Bleek niet te kloppen: FS25_MoistureSystem's
+-- MSLoadingStationExtension:addFillLevelToFillableObject (het bestand
+-- LoadingStationExtension.lua in de MoistureSystem-bron) roept EERST
+-- superFunc(...) aan -- dat is de originele Giants LoadingStation-functie,
+-- die zelf pas via LoadingStation:removeFillLevel onze gehookte
+-- Storage.setFillLevel aanroept -- en leest PAS DAARNA, als superFunc al
+-- teruggekeerd is, moistureSystem:getObjectMoisture(...) uit om het
+-- percentage op de trailer te zetten. Onze tijdelijke waarde was op dat
+-- moment door de "meteen terugzetten"-stap alwéér verdwenen: de trailer
+-- kreeg dus nooit de juiste, per-vak waarde te zien, ongeacht single- of
+-- multiplayer.
 --
--- Retourneert (uniqueId, fillTypeName, previousInfo) voor gebruik door
--- restoreSharedMoistureInfo, of nil als er niets aangepast is.
+-- Nieuwe, robuustere fix: geen tijdelijke toestand meer nodig. In plaats
+-- daarvan patchen we hieronder MoistureSystem.getObjectInfo zelf (zie
+-- installGetObjectInfoPatch) zodat het voor een door realSilo beheerde,
+-- geconfigureerde silo ALTIJD rechtstreeks het actieve vak teruggeeft --
+-- ongeacht wanneer of vanuit welke functie (getObjectMoisture,
+-- transferObjectInfo, of iets anders) MoistureSystem leest. Dit dekt ook
+-- de her-lezing die transferObjectInfo zelf doet om de volumegewogen
+-- menging te berekenen (main.lua: transferObjectInfo roept intern
+-- opnieuw getObjectInfo(sourceId, fillType) aan).
 -- ----------------------------------------------------------------
-function RealSiloMoistureCompat.recordStorageWithdrawal(uid, slot, fillType)
+
+-- ----------------------------------------------------------------
+-- Patcht MoistureSystem.getObjectInfo zodat een aanvraag voor de ECHTE
+-- uniqueId van een door realSilo beheerde, geconfigureerde silo wordt
+-- doorgestuurd naar het ACTIEVE vak (RealSiloCompartmentStorage.
+-- getEffectiveMoistureInfo, dezelfde functie die de UI en het droogmenu
+-- al gebruiken), in plaats van naar de gedeelde/vaak lege
+-- ms.objectInfo[uid]-waarde. Aanvragen via een synthetische vak-id
+-- ("<uid>#vak<N>", zie realSiloDryerCompat.lua) gaan hier niet doorheen
+-- (die matchen findSiloUidForObject niet, want getObjectByUniqueId kent
+-- zo'n synthetische id niet) en blijven dus ongewijzigd het originele
+-- gedrag volgen. Voor elk ander object (voertuigen, balen, niet-realSilo
+-- silo's, ...) verandert er niets.
+-- ----------------------------------------------------------------
+local function installGetObjectInfoPatch()
     local ms = g_currentMission and g_currentMission.MoistureSystem
-    if ms == nil or slot == nil or slot.moisture == nil or ms.objectInfo == nil then
-        return nil
+    if ms == nil then return false end
+    if ms._realSiloGetObjectInfoPatched then return true end
+    ms._realSiloGetObjectInfoPatched = true
+
+    local originalGetObjectInfo = ms.getObjectInfo
+
+    -- Wapent tegen herintrede: getEffectiveMoistureInfo valt, als een vak nog
+    -- geen eigen waarde heeft (geen virtuele vak-id, slot.moisture nog nil --
+    -- bv. graan uit een save van vóór de mod), zelf terug op ms:getObjectInfo
+    -- (deze zelfde, nu gepatchte functie) om een eerste waarde op te halen.
+    -- Zonder deze vlag zou dat een oneindige recursie geven: onze patch roept
+    -- getEffectiveMoistureInfo aan, die roept ms.getObjectInfo aan, die roept
+    -- (voor hetzelfde, nog altijd niet-gevulde actieve vak) opnieuw
+    -- getEffectiveMoistureInfo aan, enzovoort.
+    local resolving = {}
+
+    ms.getObjectInfo = function(self, uniqueId, fillType)
+        if uniqueId ~= nil and fillType ~= nil and not resolving[uniqueId] then
+            local object = g_currentMission:getObjectByUniqueId(uniqueId)
+            local uid = findSiloUidForObject(object)
+            if uid ~= nil and realSiloManager ~= nil and realSiloManager.isConfigured(uid) then
+                local data = RealSiloCompartmentStorage.siloSlots[uid]
+                local active = data and data.slots and data.slots[data.activeSlot]
+                if active ~= nil and active.fillType == fillType and active.fillLevel and active.fillLevel > 0 then
+                    local ownerPlaceable = active.isExtension and active.extPlaceable or data.placeable
+                    resolving[uniqueId] = true
+                    local info = RealSiloCompartmentStorage.getEffectiveMoistureInfo(
+                        ownerPlaceable, active, uid, data.activeSlot)
+                    resolving[uniqueId] = nil
+                    if info ~= nil then
+                        return info
+                    end
+                end
+            end
+        end
+        return originalGetObjectInfo(self, uniqueId, fillType)
     end
-    local data  = RealSiloCompartmentStorage.siloSlots[uid]
-    local owner = getMoistureOwner(data and data.placeable, uid)
-    if owner == nil or owner.uniqueId == nil then return nil end
 
-    local fillTypeName = g_fillTypeManager and g_fillTypeManager:getFillTypeNameByIndex(fillType)
-    if fillTypeName == nil then return nil end
-
-    local previous = ms.objectInfo[owner.uniqueId] and ms.objectInfo[owner.uniqueId][fillTypeName]
-
-    ms.objectInfo[owner.uniqueId] = ms.objectInfo[owner.uniqueId] or {}
-    ms.objectInfo[owner.uniqueId][fillTypeName] = {
-        moisture = slot.moisture,
-        quality  = slot.quality
-    }
-
-    return owner.uniqueId, fillTypeName, previous
-end
-
--- Zet de gedeelde MoistureSystem-waarde terug naar wat hij was vóór
--- recordStorageWithdrawal hem tijdelijk overschreef. `previous` mag nil
--- zijn (er was nog geen gedeelde waarde) -- dat wist de key gewoon weer.
-function RealSiloMoistureCompat.restoreSharedMoistureInfo(uniqueId, fillTypeName, previous)
-    local ms = g_currentMission and g_currentMission.MoistureSystem
-    if ms == nil or ms.objectInfo == nil or uniqueId == nil or fillTypeName == nil then
-        return
-    end
-    if ms.objectInfo[uniqueId] == nil then return end
-    ms.objectInfo[uniqueId][fillTypeName] = previous
+    return true
 end
 
 -- Verstuur vocht/kwaliteit eenmaal kort nadat een storting klaar is, niet
@@ -473,27 +495,15 @@ end
 -- MoistureSystem:loadMap(), dat draait al vóór onStartMission) als de
 -- mod actief is.
 --
--- v6: we hebben in de praktijk GEEN van de succes/faal-logregels van
--- deze installers teruggezien in een log waarin RealSiloDebug wel
--- degelijk aan bleek te staan (andere DIAG-regels kwamen wel door) —
--- dus staat nu niet vast of dit blok ooit met een niet-nil
--- MoistureSystem draait. Daarom nu: (1) een ALTIJD-zichtbare regel bij
--- de eerste poging, zodat we voortaan zwart-op-wit zien of dit blok
--- draait en wat het aantreft, en (2) een korte retry via de update-
--- loop (max 5 sec) voor het geval MoistureSystem net op dat exact
--- moment nog niet klaar stond.
+-- Daarnaast een korte retry via de update-loop voor het geval
+-- MoistureSystem op dat moment nog niet klaar stond.
 -- ----------------------------------------------------------------
 local _installAttempts = 0
 
 local function tryInstallMoistureCompat()
     _installAttempts = _installAttempts + 1
-    local ms = g_currentMission and g_currentMission.MoistureSystem
-    if _installAttempts == 1 then
-        RealSiloDebug.print(
-            "[realSilo][DIAG] realSiloMoistureCompat: eerste installatiepoging, MoistureSystem=%s",
-            tostring(ms ~= nil))
-    end
     local ok1 = installHasFillTypePatch()
+    installGetObjectInfoPatch()
     installUnloadMoistureHook()
     installDialogHook()
     return ok1
@@ -526,9 +536,7 @@ Mission00.onStartMission = Utils.appendedFunction(Mission00.onStartMission, func
             _moistureCompatDone = true
         elseif _installAttempts > 300 then
             _moistureCompatDone = true
-            RealSiloDebug.print("[realSilo][DIAG] realSiloMoistureCompat: MoistureSystem nooit gevonden na 300 pogingen, gestopt met proberen")
         end
     end)
 end)
 
-RealSiloDebug.print("[realSilo] realSiloMoistureCompat geladen")

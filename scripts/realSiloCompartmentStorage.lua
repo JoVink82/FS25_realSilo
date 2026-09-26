@@ -47,7 +47,6 @@ RealSiloCompartmentStorage.siloSlots = {}
 function RealSiloCompartmentStorage.initialize(placeable, uid, numSlots, capacity)
     local spec = placeable.spec_silo
     if spec == nil or spec.storages == nil or #spec.storages == 0 then
-        RealSiloDebug.print("[realSilo] FOUT: geen spec_silo.storages op placeable")
         return false
     end
 
@@ -77,8 +76,6 @@ function RealSiloCompartmentStorage.initialize(placeable, uid, numSlots, capacit
 
     realSiloStorageLink[realStorage] = uid
 
-    RealSiloDebug.print(string.format("[realSilo] %d vak(ken) geïnitialiseerd voor %s (boekhouding, geen nieuwe storage-objecten)",
-        numSlots, uid))
     return true
 end
 
@@ -97,7 +94,6 @@ function RealSiloCompartmentStorage.cleanup(placeable, uid)
     end
 
     RealSiloCompartmentStorage.siloSlots[uid] = nil
-    RealSiloDebug.print(string.format("[realSilo] Vak-boekhouding verwijderd voor %s", uid))
 end
 
 -- ----------------------------------------------------------------
@@ -123,7 +119,6 @@ function RealSiloCompartmentStorage.setActiveSlot(uid, slotIndex)
         slot.isActive = (i == slotIndex)
     end
 
-    RealSiloDebug.print(string.format("[realSilo] Actief vak voor %s: vak %d", uid, slotIndex))
 end
 
 -- ----------------------------------------------------------------
@@ -176,7 +171,6 @@ function RealSiloCompartmentStorage.emptySlot(uid, slotIndex)
     slot.fillLevel = 0
     slot.fillType  = 0
 
-    RealSiloDebug.print(string.format("[realSilo] Vak %d geleegd (%.0f L verwijderd)", slotIndex, amount))
     return true
 end
 
@@ -215,7 +209,6 @@ function RealSiloCompartmentStorage.saveToXML(xmlFile, key, uid)
         -- van reeds opgeslagen waarden uit oudere versies.
         savedCount = savedCount + 1
     end
-    RealSiloDebug.print(string.format("[realSilo] %d vak(ken) opgeslagen voor %s", savedCount, uid))
 end
 
 -- ----------------------------------------------------------------
@@ -258,7 +251,6 @@ function RealSiloCompartmentStorage.loadFromXML(xmlFile, key, uid)
         end
     end
 
-    RealSiloDebug.print(string.format("[realSilo] Vak-verdeling geladen voor %s (actief: vak %d)", uid, activeSlot))
 end
 
 -- ----------------------------------------------------------------
@@ -271,12 +263,10 @@ function RealSiloCompartmentStorage.setSlotCapacity(uid, slotIndex, newCap)
     if not slot then return false end
 
     if slot.isExtension and slot.xmlLocked then
-        RealSiloDebug.print("[realSilo] Kan capaciteit van XML-locked extension-vak niet aanpassen")
         return false
     end
 
     slot.capacity = newCap
-    RealSiloDebug.print(string.format("[realSilo] Vak %d capaciteit: %d L", slotIndex, newCap))
     return true
 end
 
@@ -300,8 +290,6 @@ function RealSiloCompartmentStorage.setSlotName(uid, slotIndex, name)
     end
 
     slot.name = name
-    RealSiloDebug.print(string.format("[realSilo] Vak %d naam: %s",
-        slotIndex, (name ~= "" and name) or "(standaard)"))
     return true
 end
 
@@ -356,8 +344,8 @@ function RealSiloCompartmentStorage.moveBetweenSlots(uid, fromIndex, toIndex, am
         return data.placeable
     end
     if RealSiloCompartmentStorage.getEffectiveMoistureInfo then
-        pcall(RealSiloCompartmentStorage.getEffectiveMoistureInfo, ownerPlaceableFor(fromSlot), fromSlot, uid, fromIndex)
-        pcall(RealSiloCompartmentStorage.getEffectiveMoistureInfo, ownerPlaceableFor(toSlot), toSlot, uid, toIndex)
+        RealSiloCompartmentStorage.getEffectiveMoistureInfo(ownerPlaceableFor(fromSlot), fromSlot, uid, fromIndex)
+        RealSiloCompartmentStorage.getEffectiveMoistureInfo(ownerPlaceableFor(toSlot), toSlot, uid, toIndex)
     end
 
     -- Vocht/kwaliteit meenemen naar het doelvak — ALLEEN relevant voor
@@ -457,7 +445,6 @@ end
 -- dus de werkelijke storage heeft de correcte waarden.
 -- ----------------------------------------------------------------
 function RealSiloCompartmentStorage.captureAndDistribute(uid)
-    RealSiloDebug.print("[realSilo][DIAG] captureAndDistribute AANGEROEPEN voor %s", tostring(uid))
     local data = RealSiloCompartmentStorage.siloSlots[uid]
     if not data then return end
 
@@ -513,9 +500,6 @@ function RealSiloCompartmentStorage.captureAndDistribute(uid)
                 end
             end
         end
-        RealSiloDebug.print(
-            "[realSilo] Bestaande inhoud verdeeld voor %s: fillType=%d totaal=%.0f L",
-            tostring(uid), fillType, total)
     end
 
     -- Scan ook de extension-slots: die hebben tijdens de pass-through
@@ -533,9 +517,6 @@ function RealSiloCompartmentStorage.captureAndDistribute(uid)
                         if level and level > 0.0001 then
                             slot.fillType  = fillType
                             slot.fillLevel = level
-                            RealSiloDebug.print(
-                                "[realSilo] Extension-inhoud vastgelegd slot %d: fillType=%d level=%.0f L",
-                                slot.index, fillType, level)
                             break  -- één product per extension-slot
                         end
                     end
@@ -544,7 +525,6 @@ function RealSiloCompartmentStorage.captureAndDistribute(uid)
         end
     end
 
-    RealSiloDebug.print("[realSilo] captureAndDistribute klaar voor %s", tostring(uid))
 end
 
 -- ----------------------------------------------------------------
@@ -569,9 +549,6 @@ function RealSiloCompartmentStorage.migrateLegacyMoisture(uid, slotIndex, fillTy
     ms.objectInfo[virtualId] = ms.objectInfo[virtualId] or {}
     if ms.objectInfo[virtualId][fillTypeName] == nil then
         ms.objectInfo[virtualId][fillTypeName] = { moisture = legacyMoisture, quality = legacyQuality }
-        RealSiloDebug.print(
-            "[realSilo] Legacy vocht/kwaliteit gemigreerd voor %s vak %d: moisture=%s quality=%s",
-            tostring(uid), slotIndex, tostring(legacyMoisture), tostring(legacyQuality))
     end
 end
 
@@ -596,8 +573,9 @@ function RealSiloCompartmentStorage.seedMoistureFromMoistureSystem(uid, slotInde
     if RealSiloMoistureCompat ~= nil and RealSiloMoistureCompat.getMoistureOwner ~= nil then
         placeable = RealSiloMoistureCompat.getMoistureOwner(placeable, uid)
     end
-    local ok, info = pcall(function() return ms:getObjectInfo(placeable.uniqueId, slot.fillType) end)
-    if not ok or info == nil or info.moisture == nil then return false end
+    if ms.getObjectInfo == nil or ms.objectInfo == nil then return false end
+    local info = ms:getObjectInfo(placeable.uniqueId, slot.fillType)
+    if info == nil or info.moisture == nil then return false end
 
     slot.moisture = info.moisture
     slot.quality  = info.quality
@@ -647,8 +625,11 @@ function RealSiloCompartmentStorage.getEffectiveMoistureInfo(placeable, slot, ui
         placeable = RealSiloMoistureCompat.getMoistureOwner(placeable, uid)
     end
     if not ms or not placeable or not placeable.uniqueId then return nil end
-    local ok, info = pcall(function() return ms:getObjectInfo(placeable.uniqueId, slot.fillType) end)
-    if ok and info ~= nil and info.moisture ~= nil then
+    local info = nil
+    if ms.getObjectInfo ~= nil and ms.objectInfo ~= nil then
+        info = ms:getObjectInfo(placeable.uniqueId, slot.fillType)
+    end
+    if info ~= nil and info.moisture ~= nil then
         -- v11 -- BUGFIX: "silo 1 nam de waarde van silo 2 over". Reden:
         -- MoistureSystem kent GEEN compartimenten -- het houdt maar één
         -- gedeelde waarde bij per (silo-uid, gewas). Een vak dat nog
@@ -679,39 +660,16 @@ function RealSiloCompartmentStorage.getEffectiveMoistureInfo(placeable, slot, ui
     -- nodig is en blijft de startknop uitgeschakeld.
     if slot.fillLevel ~= nil and slot.fillLevel > 0
             and ms.getDefaultMoisture ~= nil then
-        local okDefault, defaultMoisture = pcall(ms.getDefaultMoisture, ms)
-        if okDefault and defaultMoisture ~= nil then
+        local defaultMoisture = ms:getDefaultMoisture()
+        if defaultMoisture ~= nil then
             slot.moisture = defaultMoisture
             if ms.deriveQuality ~= nil then
-                local okQuality, quality = pcall(ms.deriveQuality, ms, slot.fillType, defaultMoisture)
-                if okQuality then slot.quality = quality end
+                slot.quality = ms:deriveQuality(slot.fillType, defaultMoisture)
             end
             return { moisture = slot.moisture, quality = slot.quality }
         end
     end
 
-    -- v9 -- DIAG: getObjectInfo gaf niets terug. Om definitief vast te
-    -- stellen of dit een verkeerde sleutel is (data bestaat wel, maar
-    -- onder een andere naam/uid) of een echt lege boekhouding, dumpen we
-    -- hier eenmalig per uid+fillType de RUWE staat: welke fillTypeName
-    -- verwachten we, en welke keys staan er daadwerkelijk in
-    -- ms.objectInfo[uid] (als dat object al bestaat)?
-    if RealSiloDebug and RealSiloDebug.enabled then
-        local expectedName = g_fillTypeManager and g_fillTypeManager.getFillTypeNameByIndex
-            and g_fillTypeManager:getFillTypeNameByIndex(slot.fillType)
-        local rawData = ms.objectInfo and ms.objectInfo[placeable.uniqueId]
-        local keys = {}
-        if rawData ~= nil then
-            for k, _ in pairs(rawData) do table.insert(keys, tostring(k)) end
-        end
-        RealSiloDebug.print(string.format(
-            "[realSilo][DIAG] getEffectiveMoistureInfo RAW: uid=%s slot.fillType=%s verwachteNaam=%s objectInfo[uid]=%s keys=[%s]",
-            tostring(placeable.uniqueId), tostring(slot.fillType), tostring(expectedName),
-            tostring(rawData ~= nil), table.concat(keys, ",")))
-    end
-
-    if ok then return info end
-    return nil
+    return info
 end
 
-RealSiloDebug.print("[realSilo] RealSiloCompartmentStorage (boekhoud-versie) geladen")

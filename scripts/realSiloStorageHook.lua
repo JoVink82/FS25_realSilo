@@ -118,29 +118,15 @@ Storage.getFreeCapacity = function(self, fillType)
     end
     local active = data.slots[data.activeSlot]
     if not active then
-        RealSiloDebug.print("[realSilo][DIAG] getFreeCapacity=0: geen actief vak (uid=%s slot=%s)",
-            tostring(uid), tostring(data.activeSlot))
         return 0
     end
     if active.storage ~= self then
-        RealSiloDebug.print("[realSilo][DIAG] getFreeCapacity=0: actief vak %d hoort bij andere storage (uid=%s)",
-            data.activeSlot, tostring(uid))
         return 0
     end
     if active.fillType ~= 0 and fillType ~= nil and active.fillType ~= fillType then
-        RealSiloDebug.print("[realSilo][DIAG] getFreeCapacity=0: vak %d heeft ft=%s, gevraagd ft=%s (uid=%s)",
-            data.activeSlot, tostring(active.fillType), tostring(fillType), tostring(uid))
         return 0
     end
     local free = math.max(active.capacity - active.fillLevel, 0)
-    if free <= 0 then
-        RealSiloDebug.print("[realSilo][DIAG] getFreeCapacity=0: vak %d vol (%.0f/%.0f, uid=%s)",
-            data.activeSlot, active.fillLevel, active.capacity, tostring(uid))
-    end
-    RealSiloDebug.print(
-        "[realSilo] getFreeCapacity uid=%s actiefVak=%d isExt=%s fillType=%s free=%.0f",
-        tostring(uid), data.activeSlot, tostring(active.isExtension),
-        tostring(fillType), free)
     return free
 end
 
@@ -233,9 +219,6 @@ Storage.setFillLevel = function(self, fillLevel, fillType, fillInfo)
     -- toegepast; als wij die fractie negeren blijft de discharge-state aan
     -- en blijft een trailer in de kiepstand staan.
     if delta > 0 then
-        RealSiloDebug.print(
-            "[realSilo][DIAG] storten uid=%s ft=%s gevraagd=%.0f boekTotaal=%.0f delta=%.0f actiefVak=%d",
-            tostring(uid), tostring(fillType), fillLevel, bookTotal, delta, data.activeSlot)
         -- Storten gebeurt UITSLUITEND in het actieve vak. Als de
         -- aangesproken storage niet de storage van het actieve vak is,
         -- doen we niets — getFreeCapacity gaf voor die storage ook al 0,
@@ -287,37 +270,27 @@ Storage.setFillLevel = function(self, fillLevel, fillType, fillInfo)
 
         if active then drain(active) end
 
-        RealSiloDebug.print(
-            "[realSilo][DIAG] laden uid=%s ft=%s gevraagd=%.0f virtueelVoor=%.0f delta=%.0f gedraineerd=%.0f actiefVak=%d",
-            tostring(uid), tostring(fillType), fillLevel, virtualCurrent, delta, totalDrained, data.activeSlot)
 
         if totalDrained > 0 then
-            -- Vlak VOOR de echte storage-update: vertel MoistureSystem welk
-            -- vocht/kwaliteit dit specifieke vak heeft, zodat de trailer die
-            -- nu laadt de juiste waarde krijgt in plaats van de gedeelde,
-            -- mogelijk-van-een-ander-vak-afkomstige MoistureSystem-waarde.
-            -- Direct na de echte update weer terugzetten, zodat ANDERE
-            -- vakken zonder eigen vocht-record (die op deze gedeelde
-            -- waarde vertrouwen) niet blijvend de waarde van dit vak
-            -- overnemen.
-            local moistureUid, moistureFtName, moisturePrev
-            if RealSiloMoistureCompat ~= nil
-                    and RealSiloMoistureCompat.recordStorageWithdrawal ~= nil then
-                moistureUid, moistureFtName, moisturePrev =
-                    RealSiloMoistureCompat.recordStorageWithdrawal(uid, active, fillType)
-            end
-
+            -- v20 -- de vorige aanpak leende hier de gedeelde MoistureSystem-
+            -- waarde tijdelijk (zetten, echte storage bijwerken, meteen
+            -- terugzetten) zodat MoistureSystem's eigen laad-hook het juiste
+            -- vak zou lezen. Bleek niet te werken: MoistureSystem leest pas
+            -- ná deze hele Storage.setFillLevel-aanroep (in
+            -- LoadingStationExtension:addFillLevelToFillableObject, ná
+            -- superFunc), dus altijd NA onze terugzet-actie -- de aanhanger
+            -- kreeg dus nooit de geleende waarde te zien. Opgelost door
+            -- MoistureSystem.getObjectInfo zelf te patchen (zie
+            -- realSiloMoistureCompat.lua, installGetObjectInfoPatch): die
+            -- geeft voor een door realSilo beheerde silo nu altijd
+            -- rechtstreeks het actieve vak terug, ongeacht wanneer of
+            -- vanuit welke aanroep MoistureSystem leest. Geen tijdelijke
+            -- toestand meer nodig hier.
             self._realSiloApplying = true
             originalSetFillLevel(self, math.max(realCurrentBefore - totalDrained, 0), fillType, fillInfo)
             self._realSiloApplying = false
             scheduleSlotSyncCorrection(uid)
-
-            if moistureUid ~= nil and RealSiloMoistureCompat ~= nil
-                    and RealSiloMoistureCompat.restoreSharedMoistureInfo ~= nil then
-                RealSiloMoistureCompat.restoreSharedMoistureInfo(moistureUid, moistureFtName, moisturePrev)
-            end
         end
     end
 end
 
-RealSiloDebug.print("[realSilo] Storage hooks geïnstalleerd (v9 - geconfigureerde silo's beheren)")

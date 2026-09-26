@@ -135,8 +135,8 @@ local function ensureVirtualSeeded(uid, slotIndex, data, slot)
     end
 
     local ownerPlaceable = getSlotOwnerPlaceable(uid, data, slot)
-    local ok, info = pcall(RealSiloCompartmentStorage.getEffectiveMoistureInfo, ownerPlaceable, slot)
-    if not ok or info == nil or info.moisture == nil then return nil end
+    local info = RealSiloCompartmentStorage.getEffectiveMoistureInfo(ownerPlaceable, slot)
+    if info == nil or info.moisture == nil then return nil end
 
     ms.objectInfo[virtualId][fillTypeName] = { moisture = info.moisture, quality = info.quality }
     return fillTypeName
@@ -206,7 +206,7 @@ local function buildProxyPlaceable(uid, slotIndex)
     proxy.getOwnerFarmId = function() return mainPlaceable:getOwnerFarmId() end
     proxy.getName = function()
         local baseName = (mainPlaceable.getName and mainPlaceable:getName()) or "Silo"
-        local vakLabel  = g_i18n:getText("realSilo_compartment") or "Vak"
+        local vakLabel  = g_i18n:getText("realSilo_compartment") or "Silo"
         return string.format("%s - %s %d", baseName, vakLabel, slotIndex)
     end
     return proxy
@@ -279,8 +279,8 @@ local function installOwnedDryablesSplit(instance)
                 local data = RealSiloCompartmentStorage.siloSlots[uid]
                 if data and data.slots then
                     for slotIndex = 1, #data.slots do
-                        local ok, proxy = pcall(buildProxyPlaceable, uid, slotIndex)
-                        if ok and proxy then table.insert(final, proxy) end
+                        local proxy = buildProxyPlaceable(uid, slotIndex)
+                        if proxy then table.insert(final, proxy) end
                     end
                 end
             else
@@ -290,7 +290,6 @@ local function installOwnedDryablesSplit(instance)
         return final
     end
 
-    RealSiloDebug.print("[realSilo] MoistureSystem Grain Drying-menu: door realSilo beheerde silo's opgesplitst per vak")
     return true
 end
 
@@ -307,9 +306,7 @@ local function installGetPlaceableByUniqueIdPatch(instance)
     instance.getPlaceableByUniqueId = function(self, uniqueId)
         local uid, slotIndex = RealSiloDryerCompat.parseVirtualId(uniqueId)
         if uid ~= nil then
-            local ok, proxy = pcall(buildProxyPlaceable, uid, slotIndex)
-            if ok then return proxy end
-            return nil
+            return buildProxyPlaceable(uid, slotIndex)
         end
         return originalGetByUid(self, uniqueId)
     end
@@ -354,16 +351,12 @@ local function syncProxyMoistureToSlot(placeable)
     if not slot or not slot.fillType or slot.fillType == 0 then return end
 
     local ms = g_currentMission and g_currentMission.MoistureSystem
-    if not ms then return end
+    if not ms or ms.objectInfo == nil then return end
     local fillTypeName = g_fillTypeManager:getFillTypeNameByIndex(slot.fillType)
     local info = fillTypeName and ms.objectInfo[placeable.uniqueId] and ms.objectInfo[placeable.uniqueId][fillTypeName]
     if not info or info.moisture == nil then return end
 
     if slot.moisture ~= info.moisture or slot.quality ~= info.quality then
-        RealSiloDebug.print(
-            "[realSilo][DIAG] moisture-sync: vak %s#vak%s: moisture %s -> %s, quality %s -> %s (broadcast naar clients)",
-            tostring(uid), tostring(slotIndex), tostring(slot.moisture), tostring(info.moisture),
-            tostring(slot.quality), tostring(info.quality))
         slot.moisture = info.moisture
         slot.quality  = info.quality
         RealSiloEvents.broadcastSlotSync(uid)
@@ -378,19 +371,8 @@ local function installDrySiloSafetyNet(instance)
     local originalDrySilo = instance.drySilo
     instance.drySilo = function(self, placeable, ...)
         if placeable ~= nil and placeable.realSiloSlotIndex ~= nil then
-            local ok, err = pcall(originalDrySilo, self, placeable, ...)
-            if not ok then
-                RealSiloDebug.print(string.format(
-                    "[realSilo][DIAG] drySilo-fout opgevangen voor vak %s van silo %s: %s",
-                    tostring(placeable.realSiloSlotIndex), tostring(placeable.realSiloUniqueId), tostring(err)))
-            else
-                local ok2, err2 = pcall(syncProxyMoistureToSlot, placeable)
-                if not ok2 then
-                    RealSiloDebug.print(string.format(
-                        "[realSilo][DIAG] moisture-sync-fout opgevangen voor vak %s van silo %s: %s",
-                        tostring(placeable.realSiloSlotIndex), tostring(placeable.realSiloUniqueId), tostring(err2)))
-                end
-            end
+            originalDrySilo(self, placeable, ...)
+            syncProxyMoistureToSlot(placeable)
             return
         end
         return originalDrySilo(self, placeable, ...)
@@ -472,43 +454,6 @@ local function getDryingGuiInstance()
     return moistureGui and moistureGui.pageDrying
 end
 
--- Diagnose waarom installToggleGuiPatch niet lukt: dumpt exact wat er WEL
--- bestaat langs het (gecorrigeerde) pad g_currentMission.MoistureSystem
--- -> .moistureGui -> .pageDrying, zodat een volgende test in één keer laat
--- zien welke schakel ontbreekt. Alleen aangeroepen als installToggleGuiPatch
--- faalt, en dan maar 1x per ~20 sec (zelfde cadans als de rest).
-local function diagDumpGuiPatchState()
-    local ms = g_currentMission and g_currentMission.MoistureSystem
-    if ms == nil then
-        RealSiloDebug.print("[realSilo][DIAG] guiPatch-diag: g_currentMission.MoistureSystem is nil")
-        return
-    end
-
-    local moistureGui = ms.moistureGui
-    if moistureGui == nil then
-        RealSiloDebug.print("[realSilo][DIAG] guiPatch-diag: g_currentMission.MoistureSystem.moistureGui is nil (SHIFT+M-scherm nog niet geladen?)")
-        return
-    end
-
-    local instance = moistureGui.pageDrying
-    if instance == nil then
-        RealSiloDebug.print("[realSilo][DIAG] guiPatch-diag: moistureGui.pageDrying is nil (FrameReference nog niet opgelost?)")
-        return
-    end
-
-    local matches = {}
-    for k, v in pairs(instance) do
-        if type(k) == "string" and (k:lower():find("btn", 1, true) or k:lower():find("toggle", 1, true)) then
-            table.insert(matches, k .. "=" .. tostring(v))
-        end
-    end
-    table.sort(matches)
-    RealSiloDebug.print("[realSilo][DIAG] guiPatch-diag: pageDrying gevonden. velden met 'btn'/'toggle' in de naam: %s",
-        #matches > 0 and table.concat(matches, " | ") or "(geen)")
-    RealSiloDebug.print("[realSilo][DIAG] guiPatch-diag: instance.btnToggleDrying=%s (type=%s)",
-        tostring(instance.btnToggleDrying), type(instance.btnToggleDrying))
-end
-
 -- BLEEK (2026-09-06, diagnostische dump): self.btnToggleDrying is HELEMAAL
 -- GEEN GuiElement/ButtonElement -- het is een gewone Lua-tabel die
 -- MoistureGuiDrying zelf in :initialize() aanmaakt voor FS25's "menu button
@@ -547,17 +492,12 @@ local function patchToggleButtonInfo(instance)
     info.callback = function()
         local entry = instance:getSelectedEntry()
         local canToggle = entry ~= nil and instance:canToggle(entry)
-        RealSiloDebug.print(
-            "[realSilo][DIAG] onClickToggleDrying: entry=%s uid=%s canToggle=%s isDrying=%s",
-            tostring(entry ~= nil), tostring(entry and entry.uniqueId), tostring(canToggle),
-            tostring(entry and entry.isDrying))
         if entry == nil or not canToggle then return end
 
         local placeable = entry.placeable
         local uid = placeable and placeable.realSiloUniqueId
         if uid == nil then
             -- Geen realSilo-vak-proxy: gewoon origineel gedrag.
-            RealSiloDebug.print("[realSilo][DIAG] onClickToggleDrying: geen realSilo-vak, origineel pad")
             if originalCallback ~= nil then
                 return originalCallback()
             end
@@ -568,14 +508,10 @@ local function patchToggleButtonInfo(instance)
         -- basis van silo-uid + vakindex. RealSiloEvents.sendDryerToggle
         -- kijkt zelf al of dit de server/host is of een client, net als
         -- alle andere RealSiloEvents.sendXxx-helpers.
-        RealSiloDebug.print(
-            "[realSilo][DIAG] onClickToggleDrying: realSilo-vak uid=%s slot=%s -> sendDryerToggle",
-            tostring(uid), tostring(placeable.realSiloSlotIndex))
         RealSiloEvents.sendDryerToggle(uid, placeable.realSiloSlotIndex)
         instance:refreshList()
     end
 
-    RealSiloDebug.print("[realSilo] MoistureSystem Grain Drying-menu: droger-toggle voor vakken loopt nu via realSilo's eigen event")
     return true
 end
 
@@ -630,24 +566,12 @@ local _dryerCompatDone = false
 -- detecteren of dit een dedicated server is. Op een client lukt het zodra
 -- de speler het menu voor het eerst opent; op een proces waar dat nooit
 -- gebeurt (headless of anderszins) blijft ok4 gewoon voor altijd false,
--- zonder enige schade -- en RealSiloDebug.print is toch al stil zolang de
--- companion-debugmod niet geinstalleerd is, dus ook geen logspam in een
--- normale (niet-diagnostische) sessie. Simpelweg: geen cap, geen
+-- zonder enige schade (en zonder logregels). Simpelweg: geen cap, geen
 -- omgevingsdetectie, gewoon onbeperkt blijven proberen -- zelfde filosofie
 -- als de dryingSystem-aanwezigheidscheck hierboven.
 
 local function tryInstallDryerCompat()
     _dryerCompatAttempts = _dryerCompatAttempts + 1
-    if _dryerCompatAttempts == 1 then
-        local dsInstance = g_currentMission and g_currentMission.dryingSystem
-        RealSiloDebug.print(
-            "[realSilo][DIAG] realSiloDryerCompat: eerste installatiepoging, g_currentMission.dryingSystem=%s",
-            tostring(dsInstance ~= nil))
-    elseif _dryerCompatAttempts % 600 == 0 then
-        RealSiloDebug.print(
-            "[realSilo][DIAG] realSiloDryerCompat: nog steeds aan het proberen (poging %d), g_currentMission.dryingSystem=%s",
-            _dryerCompatAttempts, tostring(g_currentMission and g_currentMission.dryingSystem ~= nil))
-    end
 
     local instance = g_currentMission and g_currentMission.dryingSystem
     if instance == nil then
@@ -657,7 +581,6 @@ local function tryInstallDryerCompat()
         -- gemeten: 15.000+ pogingen op een server zonder MoistureSystem.
         if _dryerCompatAttempts > 3000 then
             _dryerCompatDone = true
-            RealSiloDebug.print("[realSilo][DIAG] realSiloDryerCompat: MoistureSystem niet aanwezig, gestopt met proberen")
         end
         return false
     end
@@ -668,19 +591,7 @@ local function tryInstallDryerCompat()
 
     local ok4 = installToggleGuiPatch()
 
-    if ok1 and ok2 and ok3 and ok4 then
-        RealSiloDebug.print("[realSilo][DIAG] realSiloDryerCompat: installatie voltooid na " .. tostring(_dryerCompatAttempts) .. " poging(en)")
-        return true
-    end
-    if _dryerCompatAttempts == 1 or _dryerCompatAttempts % 600 == 0 then
-        RealSiloDebug.print(
-            "[realSilo][DIAG] realSiloDryerCompat: nog niet compleet | getOwnedDryables=%s getPlaceableByUniqueId=%s drySilo=%s dryerToggleKnop=%s",
-            tostring(ok1), tostring(ok2), tostring(ok3), tostring(ok4))
-        if not ok4 then
-            diagDumpGuiPatchState()
-        end
-    end
-    return false
+    return ok1 and ok2 and ok3 and ok4
 end
 
 RealSiloDryerCompat.tryInstall = tryInstallDryerCompat
@@ -699,4 +610,3 @@ Mission00.onStartMission = Utils.appendedFunction(Mission00.onStartMission, func
     end)
 end)
 
-RealSiloDebug.print("[realSilo] realSiloDryerCompat geladen (vakken worden als aparte droogbare silo's aangeboden aan MoistureSystem)")

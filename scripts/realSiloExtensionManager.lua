@@ -75,8 +75,6 @@ function RealSiloExtensionManager.link(extPlaceable, uid, savedCap, savedFt, sav
     if isActive then data.activeSlot = newIndex end
 
     RealSiloExtensionManager.linked[extPlaceable] = { uid = uid, storage = extStorage }
-    RealSiloDebug.print(string.format("[realSilo] Extension gekoppeld: vak %d aan %s (cap: %.0f L, fill: %.0f L)",
-        newIndex, uid, cap, savedFl or 0))
 
     -- Stuur meteen een slot-update naar alle clients zodat het nieuwe
     -- extension-vak zichtbaar wordt zonder dat de speler hoeft op te slaan.
@@ -135,13 +133,10 @@ function RealSiloExtensionManager.linkMulti(extPlaceable, uid, compartments)
 
         table.insert(entries, { uid = uid, storage = extStorage, index = newIndex })
 
-        RealSiloDebug.print(string.format("[realSilo] Extension multi-vak %d gekoppeld aan %s (cap: %.0f L, fill: %.0f L)",
-            newIndex, uid, cap, comp.fillLevel or 0))
     end
 
     RealSiloExtensionManager.linkedMulti[extPlaceable] = entries
 
-    RealSiloDebug.print(string.format("[realSilo] Multi-extension gekoppeld aan %s (%d vakken)", uid, #entries))
 
     if g_server ~= nil then
         RealSiloEvents.broadcastSlotSync(uid)
@@ -178,7 +173,6 @@ function RealSiloExtensionManager.unlink(extPlaceable)
         if storage then realSiloStorageLink[storage] = nil end
 
         RealSiloExtensionManager.linkedMulti[extPlaceable] = nil
-        RealSiloDebug.print(string.format("[realSilo] Multi-extension ontkoppeld van %s (%d vakken)", uid, #entries))
         return
     end
 
@@ -204,7 +198,6 @@ function RealSiloExtensionManager.unlink(extPlaceable)
 
     realSiloStorageLink[storage] = nil
     RealSiloExtensionManager.linked[extPlaceable] = nil
-    RealSiloDebug.print(string.format("[realSilo] Extension ontkoppeld van %s", uid))
 end
 
 -- ============================================================
@@ -240,8 +233,6 @@ function RealSiloExtensionManager.saveToXML(xmlFile)
             setXMLFloat(xmlFile,  key .. "#fillLevel", slot.fillLevel or 0)
             setXMLInt(xmlFile,    key .. "#isActive",  slot.isActive and 1 or 0)
             i = i + 1
-            RealSiloDebug.print(string.format("[realSilo] Extension opgeslagen: %s (cap:%.0f fill:%.0f)",
-                entry.uid, slot.capacity or 0, slot.fillLevel or 0))
         end
     end
 
@@ -260,7 +251,6 @@ function RealSiloExtensionManager.saveToXML(xmlFile)
                 setXMLInt(xmlFile,   cKey .. "#isActive",  slot.isActive and 1 or 0)
             end
             i = i + 1
-            RealSiloDebug.print(string.format("[realSilo] Multi-extension opgeslagen: %s (%d vakken)", uid, #slots))
         end
     end
 end
@@ -308,9 +298,6 @@ function RealSiloExtensionManager.loadFromXML(xmlFile)
         end
         i = i + 1
     end
-    if i > 0 then
-        RealSiloDebug.print(string.format("[realSilo] %d extension(s) klaar voor herstel", i))
-    end
 end
 
 -- ============================================================
@@ -343,4 +330,3 @@ function RealSiloExtensionManager.claimSavedData()
     return table.remove(RealSiloExtensionManager.pendingSaved, 1)
 end
 
-RealSiloDebug.print("[realSilo] RealSiloExtensionManager (boekhoud-versie) geladen")

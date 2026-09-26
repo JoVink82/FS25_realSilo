@@ -820,9 +820,6 @@ function RealSiloDialog:onConfirm()
     local cap        = math.max(math.floor(totalCap / numComps), 1000)
     local isConfigured = realSiloManager.isConfigured(uid)
 
-    RealSiloDebug.print(
-        "[realSilo][DIAG] onConfirm: uid=%s numComps=%d totalCap=%d cap=%d isConfigured=%s naam=%s",
-        tostring(uid), numComps, totalCap, cap, tostring(isConfigured), tostring(naam))
 
     if isConfigured then
         -- Controleer of silo leeg is bij ELKE config-wijziging (ook alleen naam is OK)
@@ -843,14 +840,12 @@ function RealSiloDialog:onConfirm()
     end
 
     local ok, err = RealSiloEvents.sendConfig(uid, numComps, cap, naam, transferRate, extRange)
-    RealSiloDebug.print("[realSilo][DIAG] sendConfig resultaat: ok=%s err=%s", tostring(ok), tostring(err))
     if ok then
         local silo = realSiloManager.getSilo(uid)
         local msg = string.format(g_i18n:getText("realSilo_configSaved"),
             silo.config.numCompartments,
             g_i18n:formatVolume(silo.config.capacityPerCompartment, 0))
         g_currentMission:addIngameNotification(FSBaseMission.INGAME_NOTIFICATION_OK, msg)
-        RealSiloDebug.print("[realSilo] " .. msg)
         self.selectedIndex = 1
         if self._goToExtensionsAfterSilo then
             self._goToExtensionsAfterSilo = false
@@ -989,7 +984,6 @@ function RealSiloDialog:onConfirmSlot()
         local msg = string.format(g_i18n:getText("realSilo_slotCapSaved"),
             slotIdx, g_i18n:formatVolume(cap, 0))
         g_currentMission:addIngameNotification(FSBaseMission.INGAME_NOTIFICATION_OK, msg)
-        RealSiloDebug.print("[realSilo] " .. msg)
     end
 
     self:showPage(1)
@@ -1162,7 +1156,6 @@ function RealSiloDialog.register(modDirectory)
     local dialog = RealSiloDialog.new(g_i18n)
     g_gui:loadGui(modDirectory .. "gui/RealSiloDialog.xml", "RealSiloDialog", dialog)
     RealSiloDialog.INSTANCE = dialog
-    RealSiloDebug.print("[realSilo] RealSiloDialog geregistreerd (v10)")
 end
 
 function RealSiloDialog.show(uniqueId, placeable)

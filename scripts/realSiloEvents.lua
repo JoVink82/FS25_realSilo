@@ -112,16 +112,9 @@ function RealSiloConfigEvent.apply(uid, numComps, capacity, name, transferRate, 
         RealSiloHookRescanExtensions(uid)
     end
 
-    RealSiloDebug.print(
-        "[realSilo][DIAG] ConfigEvent.apply VOOR: uid=%s gevraagd numComps=%d capacity=%d | silo gevonden=%s huidigeNumComps=%s",
-        tostring(uid), numComps, capacity, tostring(silo ~= nil),
-        tostring(silo and silo.config.numCompartments))
 
     local ok, err = realSiloManager.applyConfig(uid, numComps, capacity)
 
-    RealSiloDebug.print(
-        "[realSilo][DIAG] ConfigEvent.apply NA: ok=%s err=%s nieuweNumComps=%s",
-        tostring(ok), tostring(err), tostring(silo and silo.config.numCompartments))
 
     -- setConfigured alleen als de server dit bevestigt (of als we zelf
     -- de server/singleplayer zijn die de config toepast).
@@ -145,10 +138,6 @@ function RealSiloConfigEvent.apply(uid, numComps, capacity, name, transferRate, 
 end
 
 function RealSiloConfigEvent:run(connection)
-    RealSiloDebug.print(
-        "[realSilo][DIAG] ConfigEvent:run uid=%s numComps=%d isBroadcast=%s g_server=%s connection=%s isServerConfigured=%s",
-        tostring(self.uid), self.numComps, tostring(self.isBroadcast),
-        tostring(g_server ~= nil), tostring(connection ~= nil), tostring(self.isServerConfigured))
     -- Een BROADCAST is bedoeld voor de andere clients. Komt hij op de
     -- SERVER binnen, dan is die wijziging daar al verwerkt en moet er
     -- niets meer gebeuren. Zonder deze controle voerde de server elke
@@ -162,7 +151,6 @@ function RealSiloConfigEvent:run(connection)
 
     if g_server ~= nil and connection ~= nil and not self.isBroadcast then
         if not RealSiloUtil.canManageSilo(self.uid, connection) then
-            RealSiloDebug.print("[realSilo] Config-wijziging geweigerd: geen toestemming")
             return
         end
     end
@@ -238,7 +226,6 @@ end
 function RealSiloSlotCapacityEvent:run(connection)
     if g_server ~= nil and connection ~= nil and not self.isBroadcast then
         if not RealSiloUtil.canManageSilo(self.uid, connection) then
-            RealSiloDebug.print("[realSilo] Vak-capaciteit wijziging geweigerd: geen toestemming")
             return
         end
     end
@@ -310,7 +297,6 @@ end
 function RealSiloSlotNameEvent:run(connection)
     if g_server ~= nil and connection ~= nil and not self.isBroadcast then
         if not RealSiloUtil.canManageSilo(self.uid, connection) then
-            RealSiloDebug.print("[realSilo] Vak-naam wijziging geweigerd: geen toestemming")
             return
         end
     end
@@ -551,7 +537,6 @@ end
 function RealSiloExtensionRelinkEvent:run(connection)
     if g_server ~= nil and connection ~= nil and not self.isBroadcast then
         if not RealSiloUtil.canManageSilo(self.uid, connection) then
-            RealSiloDebug.print("[realSilo] Extension-herconfiguratie geweigerd: geen toestemming")
             return
         end
     end
@@ -580,7 +565,6 @@ function RealSiloEvents.sendExtensionRelink(uid, extPlaceable, newNum)
     return ok, err
 end
 
-RealSiloDebug.print("[realSilo] Multiplayer events geladen")
 
 -- ============================================================
 -- 6) Sync bij het joinen: client vraagt, server antwoordt
@@ -646,8 +630,6 @@ function RealSiloExtensionSyncEvent:run(connection)
     if self.extPlaceable ~= nil and not self.extPlaceable._realSiloIgnored then
         RealSiloExtensionManager.relink(self.extPlaceable, self.uid, self.comps)
         RealSiloEvents.refreshDialog(self.uid)
-        RealSiloDebug.print(string.format("[realSilo] Extension-koppeling ontvangen van server: %s (%d vak(ken))",
-            tostring(self.uid), #self.comps))
     end
 end
 
@@ -737,13 +719,11 @@ function RealSiloSyncRequestEvent:run(connection)
         RealSiloEvents.sendSlotSync(uid, connection)
     end
 
-    RealSiloDebug.print("[realSilo] Sync-verzoek beantwoord voor nieuwe verbinding")
 end
 
 function RealSiloEvents.requestSync()
     if g_client ~= nil then
         g_client:getServerConnection():sendEvent(RealSiloSyncRequestEvent.new())
-        RealSiloDebug.print("[realSilo] Sync-verzoek verstuurd naar server")
     end
 end
 
@@ -929,10 +909,6 @@ function RealSiloDryerToggleEvent:writeStream(streamId, connection)
 end
 
 function RealSiloDryerToggleEvent:run(connection)
-    RealSiloDebug.print(
-        "[realSilo][DIAG] DryerToggleEvent:run uid=%s slot=%s isBroadcast=%s newState=%s g_server=%s connection=%s",
-        tostring(self.uid), tostring(self.slotIndex), tostring(self.isBroadcast), tostring(self.newState),
-        tostring(g_server ~= nil), tostring(connection ~= nil))
 
     -- Broadcast (server -> clients): resultaat gewoon toepassen, nooit
     -- opnieuw verwerken/broadcasten (zelfde regel als de andere events
@@ -946,19 +922,14 @@ function RealSiloDryerToggleEvent:run(connection)
     if g_server == nil then return end
 
     if connection ~= nil and not RealSiloUtil.canToggleSiloDryer(self.uid, connection) then
-        RealSiloDebug.print("[realSilo] Droger-toggle geweigerd: geen toestemming")
         return
     end
 
     local isDrying = RealSiloDryerCompat.toggleDrying(self.uid, self.slotIndex)
     if isDrying == nil then
-        RealSiloDebug.print("[realSilo][DIAG] Droger-toggle: vak %s#vak%s kon niet opnieuw opgebouwd worden",
-            tostring(self.uid), tostring(self.slotIndex))
         return
     end
 
-    RealSiloDebug.print("[realSilo][DIAG] Droger-toggle verwerkt op server: uid=%s slot=%s isDrying=%s",
-        tostring(self.uid), tostring(self.slotIndex), tostring(isDrying))
 
     g_server:broadcastEvent(
         RealSiloDryerToggleEvent.new(self.uid, self.slotIndex, isDrying, true),
@@ -967,17 +938,13 @@ end
 
 -- Aanroepen vanuit realSiloDryerCompat.lua's patch op MoistureGuiDrying
 function RealSiloEvents.sendDryerToggle(uid, slotIndex)
-    RealSiloDebug.print("[realSilo][DIAG] sendDryerToggle uid=%s slot=%s g_server=%s g_client=%s",
-        tostring(uid), tostring(slotIndex), tostring(g_server ~= nil), tostring(g_client ~= nil))
     if g_server ~= nil then
         local isDrying = RealSiloDryerCompat.toggleDrying(uid, slotIndex)
         if isDrying == nil then
-            RealSiloDebug.print("[realSilo][DIAG] sendDryerToggle: lokale toggleDrying gaf nil (vak kon niet opgebouwd worden)")
             return
         end
         g_server:broadcastEvent(RealSiloDryerToggleEvent.new(uid, slotIndex, isDrying, true), true, nil, nil)
     else
         g_client:getServerConnection():sendEvent(RealSiloDryerToggleEvent.new(uid, slotIndex, false, false))
-        RealSiloDebug.print("[realSilo][DIAG] sendDryerToggle: event verstuurd naar server")
     end
 end

@@ -52,10 +52,11 @@ local function getFarmSiloFillTypeSet()
     if farmSiloFillTypeSet == nil or next(farmSiloFillTypeSet) == nil then
         local result = {}
         for _, catName in ipairs({ "farmSilo", "FARMSILO" }) do
-            local ok, list = pcall(function()
-                return g_fillTypeManager:getFillTypesByCategoryNames(catName, nil)
-            end)
-            if ok and list then
+            local list = nil
+            if g_fillTypeManager ~= nil and g_fillTypeManager.getFillTypesByCategoryNames ~= nil then
+                list = g_fillTypeManager:getFillTypesByCategoryNames(catName, nil)
+            end
+            if list ~= nil then
                 for _, ft in ipairs(list) do
                     result[ft] = true
                 end
@@ -72,22 +73,8 @@ function RealSiloUtil.isFarmSiloStorage(storage)
     local farmSet = getFarmSiloFillTypeSet()
     for ft, active in pairs(storage.fillTypes) do
         if active and farmSet[ft] then
-            RealSiloDebug.print("[realSilo] Silo herkend: accepteert FARMSILO-product (fillType %s)", tostring(ft))
             return true
         end
-    end
-    -- Niet herkend: log wat de silo WEL accepteert en hoe groot de
-    -- FARMSILO-set is, zodat we kunnen zien waar de mismatch zit.
-    if RealSiloDebug.enabled then
-        local accepted = {}
-        for ft, active in pairs(storage.fillTypes) do
-            if active then table.insert(accepted, tostring(ft)) end
-        end
-        local farmCount = 0
-        for _ in pairs(farmSet) do farmCount = farmCount + 1 end
-        RealSiloDebug.print(
-            "[realSilo] Silo NIET herkend. Accepteert fillTypes: [%s] | FARMSILO-set heeft %d types",
-            table.concat(accepted, ","), farmCount)
     end
     return false
 end
@@ -112,7 +99,6 @@ function RealSiloUtil.isFarmSiloPlaceableSilo(placeable)
     local spec = placeable and placeable.spec_silo
     if not spec or not spec.storages then return false end
     if isSellingOrBuyingStation(placeable) then
-        RealSiloDebug.print("[realSilo] Silo genegeerd: is een verkoop-/koopstation")
         return false
     end
     for _, storage in ipairs(spec.storages) do
@@ -134,14 +120,16 @@ function RealSiloUtil.resolveDisplayName(placeable, fallbackL10nKey, fallbackTex
     if name and name ~= "" and not name:find("^%$") then
         return name
     end
-    local ok, text = pcall(function() return g_i18n:getText(fallbackL10nKey) end)
-    if ok and text and text ~= "" and text ~= fallbackL10nKey then
+    local text = nil
+    if g_i18n ~= nil and fallbackL10nKey ~= nil and g_i18n:hasText(fallbackL10nKey) then
+        text = g_i18n:getText(fallbackL10nKey)
+    end
+    if text and text ~= "" and text ~= fallbackL10nKey then
         return text
     end
     return fallbackText or "Silo"
 end
 
-RealSiloDebug.print("[realSilo] RealSiloUtil geladen")
 
 -- ============================================================
 -- Multiplayer-toestemmingen
@@ -187,26 +175,18 @@ end
 function RealSiloUtil.canManageSilo(uid, connection)
     if connection == nil then return true end
 
-    local ok, allowed = pcall(function()
-        local user = g_currentMission.userManager:getUserByConnection(connection)
-        if not user then
-            RealSiloDebug.print("[realSilo] Toestemmingscheck: geen user gevonden voor connectie, geweigerd")
-            return false
-        end
-
-        local isAdmin = user.getIsMasterUser and user:getIsMasterUser()
-        if not isAdmin then
-            RealSiloDebug.print(string.format("[realSilo] Toestemmingscheck: userId=%s is geen admin, geweigerd",
-                tostring(user.userId or "?")))
-        end
-        return isAdmin == true
-    end)
-
-    if not ok then
-        RealSiloDebug.print("[realSilo] Toestemmingscheck mislukte met fout, toegestaan (fail-open): " .. tostring(allowed))
+    local userManager = g_currentMission ~= nil and g_currentMission.userManager or nil
+    if userManager == nil or userManager.getUserByConnection == nil then
         return true
     end
-    return allowed
+
+    local user = userManager:getUserByConnection(connection)
+    if not user then
+        return false
+    end
+
+    local isAdmin = user.getIsMasterUser ~= nil and user:getIsMasterUser()
+    return isAdmin == true
 end
 
 -- ----------------------------------------------------------------
@@ -222,17 +202,13 @@ end
 -- Zelfde vereenvoudigde regel: alleen admin (of host/singleplayer).
 -- ----------------------------------------------------------------
 function RealSiloUtil.canManageSiloLocal(uid)
-    local ok, allowed = pcall(function()
-        -- Server/host mag altijd (geldt ook voor singleplayer).
-        if g_currentMission:getIsServer() then
-            return true
-        end
-        -- Multiplayer-client: alleen admin (master user) mag wijzigen.
-        return g_currentMission.isMasterUser == true
-    end)
-
-    if not ok then return true end
-    return allowed
+    if g_currentMission == nil then return true end
+    -- Server/host mag altijd (geldt ook voor singleplayer).
+    if g_currentMission:getIsServer() then
+        return true
+    end
+    -- Multiplayer-client: alleen admin (master user) mag wijzigen.
+    return g_currentMission.isMasterUser == true
 end
 
 -- ----------------------------------------------------------------
@@ -254,25 +230,25 @@ end
 function RealSiloUtil.canToggleSiloDryer(uid, connection)
     if connection == nil then return true end
 
-    local ok, allowed = pcall(function()
-        local user = g_currentMission.userManager:getUserByConnection(connection)
+    if g_currentMission == nil then return true end
+
+    local userManager = g_currentMission.userManager
+    if userManager ~= nil and userManager.getUserByConnection ~= nil then
+        local user = userManager:getUserByConnection(connection)
         if user and user.getIsMasterUser and user:getIsMasterUser() then
             return true
         end
+    end
 
-        local player = g_currentMission:getPlayerByConnection(connection)
-        local farmId = player and player.farmId
-        if farmId == nil then
-            return false
-        end
-
-        local ownerFarmId = RealSiloUtil.getFarmIdForUid(uid)
-        return ownerFarmId ~= nil and ownerFarmId == farmId
-    end)
-
-    if not ok then
-        RealSiloDebug.print("[realSilo] Droger-toestemmingscheck mislukte met fout, toegestaan (fail-open): " .. tostring(allowed))
+    if g_currentMission.getPlayerByConnection == nil then
         return true
     end
-    return allowed
+    local player = g_currentMission:getPlayerByConnection(connection)
+    local farmId = player and player.farmId
+    if farmId == nil then
+        return false
+    end
+
+    local ownerFarmId = RealSiloUtil.getFarmIdForUid(uid)
+    return ownerFarmId ~= nil and ownerFarmId == farmId
 end
