@@ -39,7 +39,7 @@ Add a `<realSilo>` tag directly inside `<placeable>`, **after** the `</silo>` cl
 | `name` | No | string | Display name shown in the dialog |
 | `locked` | No | boolean | Defaults to `true` when `<realSilo>` is present. Set `locked="false"` to let players reconfigure compartments/capacity in-game. |
 | `transferRate` | No | integer | Internal transfer speed in L/min (default: 1000) |
-| `dryer` | No | boolean | Legacy, no longer functional. Kept only so old XML/savegames with this attribute don't break. |
+| `dryer` | No | boolean | Whether this silo model has a dryer. Omit it to let players toggle this themselves per silo in the dialog (default: on). Set `dryer="true"` or `dryer="false"` to fix it for this silo model — the setting then becomes read-only in the dialog. |
 
 ### Child elements — `<compartment>`
 

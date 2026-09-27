@@ -15,8 +15,15 @@ compartimenten (vakken), elk voor één product. Auteur: Jo_Vink.
   stijl toevoegen, in alle drie de talen.
 - **Zip-structuur:** bestanden staan in de ROOT van de zip
   (`modDesc.xml`, `scripts/`, `gui/`, `translations/`, `icon_RealSilo.dds`),
-  niet in een submap. Inpakken vanuit de mod-map zelf:
-  `zip -r FS25_RealSilo.zip . -x ".*"`
+  niet in een submap. Inpakken vanuit de mod-map zelf, met `.git/`,
+  `screenshots/` en alle `.md`-bestanden (README's, CLAUDE.md) uitgesloten
+  -- die horen niet in de op te leveren zip:
+  `zip -r FS25_RealSilo.zip . -x ".*" -x ".git/*" -x "screenshots/*" -x "*.md"`
+  Controleer met `unzip -l` dat er geen `.md`-bestanden in de output staan.
+- **Testversies:** bij een testreeks een letter-suffix gebruiken
+  (`1.2.0.8a`, dan `b`, `c`, ...). Bij ELKE opgeleverde update binnen zo'n
+  reeks de letter ophogen, ook als de vorige letter nog niet getest is --
+  nooit dezelfde letter twee keer opleveren.
 - **Altijd valideren voor oplevering:** Lua met `luac5.1 -p` op elk
   script, XML met een parser. Zie "Valkuilen" voor de extra checks die
   hier meermaals nodig bleken.
@@ -489,6 +496,95 @@ waarde elders periodiek in de omgekeerde richting synchroniseert
 (`ensureVirtualSeeded`'s "existing wint van slot"-tak), want die kan een
 zojuist gefixte sync stilletjes weer ongedaan maken.**
 
+### 11. Booleans die van "onschadelijk/legacy" naar "actief gehandhaafd" gaan: check de DEFAULT opnieuw
+
+`realSiloManager.hasDryer(uid)` bestond al lang (save/load/XML-plumbing
+compleet) maar werd nergens gelezen -- README_modders.md noemde het zelfs
+expliciet "Legacy, no longer functional". Bij het alsnog handhaven ervan
+(v2.0.0.0, `installOwnedDryablesSplit` in realSiloDryerCompat.lua) bleek de
+opgeslagen/geladen default `false` te zijn (`(getXMLInt(...) or 0) == 1`) --
+onschadelijk zolang niemand ernaar keek, maar zodra de vlag ineens bepaalt
+of een silo in het Grain Drying-menu verschijnt, zou ELKE bestaande silo en
+savegame (zonder dit attribuut) in één klap zijn droogfunctie verliezen.
+Fix: bij het ontbreken van het attribuut (savegame van vóór deze instelling)
+expliciet `true` aannemen, niet `false`; alleen een aanwezig 0/1-attribuut
+is de door de speler gekozen waarde. **Les: voor je een tot dusver ongebruikte
+boolean-vlag alsnog gaat handhaven, controleer expliciet wat de bestaande
+default oplevert voor data die dateert van vóór de vlag ooit gebruikt werd --
+"legacy/onschadelijk" en "veilige default zodra hij wel gelezen wordt" zijn
+twee verschillende dingen.**
+
+Tweede randgeval bij dezelfde feature: de droger UITzetten terwijl een vak
+al aan het drogen is, laat de silo verdwijnen uit `getOwnedDryables` (dus
+onzichtbaar in het menu) maar `DryingSystem.activeDryers` (een simpele,
+per-machine Lua-set, zie punt 10 hierboven) bleef zonder extra actie stiekem
+AAN staan. Fix: `RealSiloDryerCompat.stopAllDryingForSilo(uid)`, aangeroepen
+vanuit `RealSiloConfigEvent.apply` zodra `hasDryer` van true naar false gaat,
+zet elk drogend vak van die silo expliciet stil en broadcast dat resultaat
+(zelfde `RealSiloDryerToggleEvent`-kanaal als een gewone toggle-klik).
+
+### 12. Native BinaryOption/MultiTextOption: size-override breekt het widget, en lange infotekst heeft een eigen, brede label nodig
+
+Twee losse, in-game gemelde problemen na de omschakeling naar
+`fs25_binaryOption`/`fs25_multiTextOption` (zie punt 9 hierboven), allebei
+in v2.0.0.0 opgelost:
+
+**Uitlijning/overloop van rowToggle/rowStepper.** De eerste versie zette
+zelf `with="anchorTopLeft" position="305px -10px" size="230px 40px"` op de
+`BinaryOption`/`MultiTextOption`-elementen. Deze widgets gebruiken echter
+`autoAddDefaultElements` en bouwen hun eigen knoppen/slider op basis van
+hun EIGEN, vaste basismaat (`fs25_binaryOption` = 276x32px,
+`fs25_multiTextOption` = 280x36px). Een kleinere size opdringen knijpt de
+buitenkant van het widget, niet de interne knop-layout -- dat gaf precies
+het gemelde "aan de rechterkant afgekapt/lijkt over de rand te lopen"
+beeld. **Fix:** gebruik i.p.v. de kale profielen de door Giants zelf
+gebruikte "instellingenrij"-varianten `fs25_settingsBinaryOption` /
+`fs25_settingsMultiTextOption` (`sdk/xmlDoku/guiProfiles.xml`,
+`with="anchorMiddleRight"`, eigen vaste `position`) helemaal zonder eigen
+`with`/`position`/`size`-override -- die ankeren zichzelf keurig tegen de
+rechterrand van de rij, exact zoals FS25's eigen instellingenmenu. Om alle
+rijtypes visueel in dezelfde kolom te laten vallen is `rowInput` (het
+gewone tekstveld) + zijn achtergrond (`realSiloConfigInputBg`) om dezelfde
+reden omgezet naar `with="anchorTopRight" position="-15px -10px"`
+(vaste breedte 260px) i.p.v. de oude vaste linkerpositie op x=305px.
+
+**Afgekapte infotekst ("...") op ROW_INFO/ROW_CALC.** `rowLabel`
+(`realSiloConfigRowLabel`-profiel, 290px breed) werd hergebruikt voor
+zowel korte veldlabels als lange volzinnen ("This silo contains
+product. Empty it first...", "4 silos x 200,000 l each (total: ...")
+zonder `textMaxNumLines` -- FS25 kapt een `Text`-element zonder die
+attribuut standaard af op een regel. **Fix:** een los, breed label
+(`rowLabelWide`, profiel `realSiloConfigRowLabelWide`, ~700px,
+`textMaxNumLines=2`) toegevoegd als extra, standaard verborgen kind in
+dezelfde gedeelde `configRowInput`-template (zelfde patroon als
+`rowToggle`/`rowStepper`, punt 9). `populateConfigCell` gebruikt nu
+`labelWideEl` voor `ROW_INFO`/`ROW_CALC` en de smalle `labelEl` voor
+`ROW_INPUT`/`ROW_TOGGLE`.
+
+### 13. Drogen-pagina had geen zichtbare "hoe activeer ik dit"-hint
+
+De Drogen-pagina (pagina 6) is alleen via de G-toets bereikbaar (geen
+ruimte voor een 4e voetknop, zie eerder in dit bestand) en
+`g_inputBinding:setActionEventText()` verschijnt alleen in het
+F1-wereld-overzicht, dat niet zichtbaar is terwijl dit GUI-dialoogvenster
+open staat. Speler meldde: geen enkele manier gevonden om de droger te
+activeren. **Fix:** een expliciete hint-rij (`realSilo_dryerActivateHint`,
+nieuwe l10n-key, alle 3 talen) toegevoegd onderaan de Instellingen-pagina
+(`buildConfigRows`), maar ALLEEN wanneer `hasDryerVal == true` EN
+`g_currentMission.MoistureSystem` bestaat -- anders zou de hint verwarrend
+zijn voor silo's zonder droger of zonder FS25_MoistureSystem.
+
+### 14. "Silo - Silo 1" als titel is GEEN bug
+
+Gemeld als onleesbaar/verkeerd scherm, maar `getDisplayName(uid)` en het
+default-naamsysteem werken hier correct: een silo die nog geen eigen naam
+gekregen heeft, heet gewoon "Silo" (de default, zie
+`RealSiloUtil.resolveDisplayName(..., "realSilo_defaultName", "Silo")` in
+`realSiloHook.lua`). De titel `"%s - %s %d"` (displayName, "Silo", vaknr)
+geeft dan toevallig "Silo - Silo 1" -- verwarrend qua herhaling, maar
+functioneel juist. Het achterliggende leesbaarheidsprobleem op die pagina
+(afgekapte infotekst) is wel echt en valt onder punt 12 hierboven.
+
 ---
 
 ## Functionaliteit
@@ -510,6 +606,256 @@ zojuist gefixte sync stilletjes weer ongedaan maken.**
   inclusief extension-storages).
 - In een MENU melden de hooks het echte totaal, zodat het financiën-/
   prijzenoverzicht de hele silo toont in plaats van alleen het actieve vak.
+- **Wel of geen droger** (per silo instelbaar, sinds v2.0.0.0): staat uit,
+  dan verschijnen de vakken van die silo helemaal niet in FS25_MoistureSystem's
+  Grain Drying-menu (`realSiloManager.hasDryer(uid)`, gehandhaafd in
+  `realSiloDryerCompat.lua`'s `installOwnedDryablesSplit`). Standaard AAN
+  (bestaande silo's/savegames blijven drogen zoals voorheen). Kan ook
+  permanent vastgelegd worden door de map-/silomodel-XML (`dryer`-attribuut),
+  dan is de instelling read-only in de dialoog (`config.dryerXmlFixed`).
+- **Eigen "Drogen"-pagina in het realSilo-menu** (sinds v2.0.0.0, pagina 6,
+  `RealSiloDialog:buildDryerRows`): lijst van alle vakken van deze silo
+  (hoofdsilo + extensions) die op dit moment product bevatten, elk met een
+  AAN/UIT-knop. Klikken past DIRECT toe (`RealSiloEvents.sendDryerToggle`,
+  geen aparte "Opslaan"-stap zoals de andere config-pagina's — zie
+  `ROW_TOGGLE`'s `immediate`/`onToggle`-velden, toegepast vanuit
+  `onClickConfigToggle`). Bereikbaar via de G-toets (`REALSILO_DRYER`,
+  geregistreerd in `onOpen`, net als de T-toets voor Transfer) — GEEN eigen
+  footer-knop, want de 3 bestaande knoppen vullen de knoppenbalk al precies
+  600px (zie de knoppen-XML onderaan `RealSiloDialog.xml`). Rechten:
+  iedereen die de silo mag gebruiken, niet alleen de admin
+  (`RealSiloUtil.canToggleSiloDryer`, dagelijks gebruik, geen instelling) —
+  zelfde functie die ook FS25_MoistureSystem's eigen Shift+M Grain
+  Drying-knop gebruikt.
+- **Visuele AAN/UIT-stijl (`ROW_TOGGLE`) — natieve `BinaryOption`, niet
+  zelfgetekend**: eerste versie (nog binnen dezelfde v2.0.0.0-sessie)
+  tekende dit zelf als twee gekleurde vakken naast elkaar. Ontdekt via de
+  meegeleverde `EasyDevControlsPlayerFrame.xml` (companion-mod van de
+  gebruiker) dat FS25 hiervoor een ECHT native GUI-element heeft:
+  `<BinaryOption profile="fs25_binaryOption">`
+  (`BinaryOptionElement.lua`, uitbreiding van `MultiTextOptionElement`,
+  zie `sdk/debugger/gameSource.zip`), met een kant-en-klaar profiel
+  `fs25_binaryOption` in `sdk/xmlDoku/guiProfiles.xml` dat exact het
+  OFF/ON-schuifknopje van het spel se eigen instellingenmenu tekent
+  (bestaande spel-afbeeldingen, geen eigen artwork nodig). Nu gebruikt in
+  plaats van het zelfgebouwde twee-vakken-ontwerp: één
+  `<BinaryOption .../>` (`name="rowToggle"`) als extra, altijd-aanwezig
+  kind-element in het ene gedeelde `configRowInput`-celtype (nog steeds
+  ÉÉN uniform celtype, verplicht — zie SmoothList-pool-waarschuwing
+  hierboven). `populateConfigCell` zet 'm zichtbaar/onzichtbaar per
+  rijtype en synct de stand met `:setIsChecked(waarde, true)`
+  (`skipAnimation=true`, geen `forceEvent` zodat dit geen loze klik
+  veroorzaakt). Gebruikt door zowel de per-silo "Droger beschikbaar"-rij
+  (pagina 2) als elke rij op de Drogen-pagina (6). De 3 eerder
+  zelfgemaakte profielen (`realSiloToggleBox` e.a.) zijn verwijderd uit
+  `guiProfiles.xml` — niet meer nodig.
+- **VALKUIL, in-game gevonden (log.txt): `onClickCallback` van
+  BinaryOption/MultiTextOption geeft NIET het element zelf door.** Eerste
+  aanname was dat Giants' `GuiElement:raiseCallback` het aangeklikte
+  element als argument meegeeft (naar analogie van `onFocusCallback`/
+  `onLeaveCallback` in de gedecompileerde `MultiTextOptionElement.lua`,
+  die dat wél zo doen). In-game gaf dit een echte crash: `Error: Running
+  LUA method 'update'.` / `attempt to index number with
+  'rsConfigRowIndex'` — het eerste argument is dus een GETAL (`state`,
+  de nieuwe index), niet het element. **Oplossing:** het element zelf
+  ophalen via `FocusManager:getFocusedElement()` — zowel
+  `BinaryOptionElement:onLeftButtonClicked`/`onRightButtonClicked` als
+  `MultiTextOptionElement`'s eigen versies roepen synchroon
+  `FocusManager:setFocus(self)` aan vlak vóórdat de klik-callback wordt
+  aangeroepen, dus op het moment dat `onClickConfigToggle`/
+  `onClickConfigStepper` draait is `FocusManager:getFocusedElement()`
+  gegarandeerd het zojuist aangeklikte element. Altijd `type(element) ==
+  "table"` checken voor je 'm indexeert — dit soort klik-callbacks is
+  nooit 100% uit de (partiële) SDK-bron te bevestigen, dus defensief
+  coderen. Zie `onClickConfigToggle`/`onClickConfigStepper` in
+  `RealSiloDialog.lua` voor het patroon; gebruik dit ook voor eventuele
+  toekomstige natieve GUI-elementen in een lijst-cel.
+- **Aantal silo's: natieve pijltjesselector (`ROW_INPUT` met
+  `row.stepper=true`)**, sinds v2.0.0.0, zelfde stijl als "Running
+  Multiplier" in FS25's eigen instellingenmenu: profiel
+  `fs25_multiTextOption` (`MultiTextOption`-element, `name="rowStepper"`
+  in de `configRowInput`-template, naast `rowToggle`). `row.min`/`row.max`
+  bepalen het bereik (1-32); `populateConfigCell` bouwt de `texts`-lijst
+  en zet de stand met `:setState(waarde - min + 1, false)`. Alleen
+  "Aantal silo's" gebruikt dit vooralsnog — capaciteit/snelheid/
+  zoekbereik blijven gewone tekstvelden. Zelfde `rsConfigRowIndex` +
+  `FocusManager:getFocusedElement()`-patroon als hierboven.
+- **VALKUIL, in-game gevonden (screenshot): `g_i18n:getText(key) or
+  fallback` beschermt NIET tegen een ontbrekende vertaalsleutel.** Een
+  missende l10n-key geeft in FS25 geen `nil` terug maar een letterlijke
+  placeholder-string ("Missing 'key' in ..."), dus de `or fallback`
+  wordt nooit gebruikt en die placeholder-tekst verschijnt gewoon in de
+  GUI. Gebeurde met `realSilo_slotNameLabel` (pagina 3, naamveld per
+  vak) — de key bestond al in de Lua-code maar was nooit aan de drie
+  `translation_*.xml`-bestanden toegevoegd. Controleer bij een nieuwe
+  `g_i18n:getText("realSilo_...")`-aanroep ALTIJD of de key ook echt in
+  alle drie de vertaalbestanden staat (een simpele grep-diff tussen
+  gebruikte en gedefinieerde keys volstaat) — vertrouw niet op de
+  `or fallback` als vangnet.
+
+### 15. Instance-level `with=` op GuiElement/TextInput werd NIET betrouwbaar toegepast -- anchor hoort in het PROFIEL
+
+Punt 12 hierboven loste de overloop-bug van rowToggle/rowStepper op door
+`with="anchorMiddleRight"` in het PROFIEL (`fs25_settingsBinaryOption`/
+`-MultiTextOption`) te laten zitten i.p.v. als instance-attribuut. Voor
+`rowInput` (TextInput) + zijn achtergrond (`realSiloConfigInputBg`) werd
+toen echter WEL een instance-level `with="anchorTopRight"` gebruikt --
+en dat bleek zelf ook stuk: in-game overlapten het label en de
+invoerwaarde ("Silo name:" + "Farma 800 + Obi 1000" bovenop elkaar). De
+`position`-offset werd kennelijk toegepast alsof het element nog zijn
+PROFIEL-default `anchorTopLeft` had (dus vlak bij x=0, ONDER het label),
+terwijl de instance-`with` zelf genegeerd leek te worden.
+
+**Fix:** exact dezelfde aanpak als punt 12 -- `with="anchorTopRight"`
+verplaatst NAAR de profielen zelf (`realSiloConfigInputBg` en
+`realSiloConfigInput` in `guiProfiles.xml`), instance-tag in
+`RealSiloDialog.xml` houdt alleen nog `position`/`size`. **Les, definitief
+bevestigd nu met TWEE onafhankelijke gevallen (punt 12 en dit punt): `with`
+(het anchor-schema) hoort in het PROFIEL, nooit als instance-attribuut op
+het XML-element zelf -- `position`/`size` overriden op de instance is wel
+prima en het gangbare patroon door dit hele bestand heen (zie `rowLabel`,
+`dialogTitleElement`, etc.). Bij een toekomstig nieuw GUI-element: nooit
+`with=` op de instance-tag zetten, altijd in een eigen (of bestaand)
+Profile.**
+
+Tegelijk `rowLabel` verbreed van 290px naar 410px (de waarde-kolom staat nu
+altijd rechts uitgelijnd op vaste marge, dus links is meer ruimte over) en
+`realSiloConfigRowLabel` kreeg `textMaxNumLines=2` als vangnet -- nodig
+voor de langere Drogen-rijlabels uit punt 17 hieronder.
+
+### 16. Drogen-knop alsnog in de footer: de "600px is precies vol"-aanname was onze eigen keuze, geen spel-limiet
+
+Punt 13 documenteerde "geen ruimte voor een 4e voetknop" als vaststaand
+feit. Bij nader onderzoek (gebruiker vroeg expliciet om de G-actie ook als
+knop): `fs25_dialogButtonBox` (SDK-profiel) is van zichzelf
+`anchorBottomStretchingX` met `absoluteSizeOffset="50px 0px"` -- rekt dus
+uit tot (dialoogbreedte - 50px) = 860-50 = 810px. Het eerdere
+`size="600px 60px"` op de `BoxLayout`-instance was gewoon ONZE eigen,
+eerder gekozen waarde (precies passend voor 3 knoppen), geen harde
+spel-limiet. **Fix:** `size="800px 60px"` (ruim binnen de 810px die het
+profiel zelf al toestaat) + een 4e knop `buttonDryer` (`fs25_dryerMenuTitle`
+tekst, `onClick="onClickDryer"`) tussen Transfer en Close. Zichtbaarheid:
+alleen op pagina 1 EN alleen als drogen voor deze silo ook echt bruikbaar
+is (`realSiloManager.hasDryer(uid) == true` EN
+`g_currentMission.dryingSystem ~= nil`, zelfde gate als `onClickDryer`/
+`buildDryerRows` al gebruikten) -- anders een knop die altijd meteen een
+foutmelding geeft. G-toets blijft ernaast bestaan (`onOpen`, ongewijzigd),
+exact zoals Transfer al T-toets + knop combineert.
+
+**Bijvangst, zelfde ronde:** de eerdere "vindbaarheid"-hint uit punt 13
+checkte `g_currentMission.MoistureSystem` (de mod-brede referentie) terwijl
+de ECHTE gate die `onClickDryer`/`buildDryerRows`/deze nieuwe knop allemaal
+gebruiken `g_currentMission.dryingSystem` is (de kleine-letter
+DryingSystem-instance). Die twee zijn niet hetzelfde object en kunnen in
+theorie uiteenlopen. Rechtgezet naar `.dryingSystem` overal, inclusief de
+hint-rij. **Les: als een mod twee losse globals voor "is de andere mod
+actief" heeft (hier `.MoistureSystem` vs `.dryingSystem`), kopieer nooit
+zomaar de eerste de beste die je tegenkomt -- zoek de EXACTE check op die
+de functionaliteit zelf al gebruikt (hier: `onClickDryer`) en hergebruik
+precies die.**
+
+### 17. Meer info in het Drogen-menu (vocht%/grade), maar bewust GEEN ETA
+
+Gebruiker vergeleek ons "Drogen"-menu met FS25_MoistureSystem's eigen
+Grain Drying-tabel (NAME/TYPE/STATE/CROPS/ETA) en vroeg om meer info.
+Toegevoegd aan elke vak-rij in `buildDryerRows`: vocht% + kwaliteitsgrade
+via de AL BESTAANDE, elders al bewezen helper
+`RealSiloMoistureCompat.getCompartmentLabel(ownerPlaceable, fillType, slot,
+uid, slotIndex)` (dezelfde functie die de Overview-pagina's "A · 14.0%"
+al toont) -- géén nieuwe, ongeverifieerde aanroep. Plus een simpel
+"Drogend"/"Inactief"-tekstlabel, afgeleid van de toch al veilig aanwezige
+`RealSiloDryerCompat.isDrying(uid, slotIndex)`.
+
+**Bewust NIET gedaan: een ETA (resterende tijd) tonen zoals de
+Moisture-mod dat doet.** `DryingSystem`'s interne rekenmethode daarvoor
+staat nergens als Lua-bron in de meegeleverde SDK (`gameSource.zip`) om te
+verifiëren -- exact dezelfde situatie als de `onClickCallback`-aanname uit
+punt 4/Valkuil hierboven die toen een echte crash gaf. Een ETA-cijfer
+verzinnen/schatten zou een VERKEERD getal aan de speler kunnen tonen, wat
+erger is dan het gewoon weglaten. **Les: als iets alleen via een
+ongeverifieerde aanname van een ANDERE mod's interne rekenlogica te tonen
+is (i.p.v. een simpele read van een bestaande, al-gebruikte helper),
+niet gokken -- weglaten en in de UI-tekst/documentatie eerlijk verwijzen
+naar de bron-mod se eigen menu voor dat specifieke cijfer.**
+
+### 18. Pijltjesselector met een eigen stapgrootte (niet alleen 1-voor-1)
+
+Punt 12/Deel 4 introduceerde `row.stepper=true` voor "Aantal silo's", met
+een impliciete stapgrootte van 1 (de `texts`-lijst liep gewoon `row.min` t/m
+`row.max`). Voor "Speed (L/min)" (stap 1000) en "Extension search range"
+(stap 1, maar nu met bereik 1-300 i.p.v. 1-32) was een instelbare
+stapgrootte nodig. Toegevoegd: `row.step` (optioneel, default 1) --
+`populateConfigCell` bouwt de `texts`-lijst nu met
+`for n = row.min, row.max, step` i.p.v. altijd stap 1, en rondt een
+bestaande waarde die niet exact op de step-grid ligt af naar de
+dichtstbijzijnde optie (`math.floor((val - row.min) / step + 0.5)`,
+geklemd op `[0, #texts-1]`) -- nodig omdat een oude, handmatig ingevoerde
+waarde (bv. 3500 L/min uit een save van vóór deze wijziging) niet
+noodzakelijk een veelvoud van de nieuwe stapgrootte is.
+`onClickConfigStepper` leest dezelfde `row.step` terug bij het omrekenen
+van de klik-`state` naar de echte waarde
+(`row.min + (state-1) * step`). "Speed": 1000-50000 in stappen van 1000
+(bovengrens ruim onder de 65535-grens van het 16-bit streamveld in
+`RealSiloConfigEvent`, zie `realSiloEvents.lua`). "Extension search
+range": 1-300 in stappen van 1 (zelfde grenzen als de bestaande clamp in
+`onConfirm`).
+
+### 19. Lege TextInput in een SmoothList-cel: onvindbaar zonder expliciete klik-naar-focus, en bijna onzichtbaar bij een lege waarde
+
+Gemeld: op de vak-bewerkpagina (pagina 3) kon de speler geen naam invullen
+-- het "Naam:"-veld leek niet aanklikbaar. Twee samenhangende problemen,
+allebei gefixt:
+
+1. **Onzichtbaar bij lege waarde.** `realSiloConfigInputBg` (de vlakke
+   achtergrond achter een tekstveld) had `imageColor="1 1 1 0.10"` -- bij
+   een LEGE TextInput (geen tekst om naar te kijken) is dat vrijwel
+   onzichtbaar tegen de donkere rijachtergrond, dus was er geen enkele
+   visuele aanwijzing dat daar een klikbaar veld stond. Verhoogd naar
+   `0.22` -- blijft subtiel maar is nu duidelijk herkenbaar, ook leeg.
+2. **`onListClick` deed niets voor `ROW_INPUT`-rijen.** Sinds de native
+   BinaryOption/MultiTextOption-omschakeling (punt 9) is de ROW_TOGGLE-tak
+   uit `onListClick` verwijderd, maar er kwam nooit iets terug voor gewone
+   tekstvelden: een klik op de RIJ (buiten het TextInput-element zelf,
+   bijvoorbeeld op het label of de rand) deed niets, en het was onduidelijk
+   of het kleine TextInput-vlak zelf wel altijd de klik binnenkreeg
+   (dezelfde soort onzekerheid als bij BinaryOption/MultiTextOption, zie
+   punt 4 -- Giants' klik-routing binnen een SmoothList-cel is niet
+   gedocumenteerd). **Fix:** `onListClick` zet nu bij elke klik op een
+   `ROW_INPUT`-rij (zonder `stepper`) expliciet
+   `FocusManager:setFocus(row._inputElement)` -- zelfde bewezen patroon als
+   de klik-callbacks van de native widgets. Werkt overlappend met de eigen
+   klik-afhandeling van TextInput zelf (geen kwaad als die toch al werkte),
+   en lost het probleem sowieso op als dat de oorzaak was.
+
+### 20. Vindbaarheids-hint uit Deel 5/punt 13 weer verwijderd
+
+Na de Drogen-voetknop (punt 16) vond de gebruiker de losse hint-rij
+("Tip: ga terug naar het overzicht...") op de instellingenpagina overbodige
+rommel. De rij (en de bijbehorende `realSilo_dryerActivateHint`-vertaalsleutel,
+in alle 3 talen) is verwijderd -- de footer-knop + G-toets op het overzicht
+zijn nu de enige vindbaarheids-route. **Les: een hint die een tijdelijk gat
+dichtte (geen knop, dus een tekst-uitleg) hoort te verdwijnen zodra het
+onderliggende gat zelf gedicht is (hier: de knop) -- laat 'm niet
+per ongeluk staan als dode rommel.**
+
+### 21. Naamveld op pagina 3 weer verwijderd (i.p.v. gefixt)
+
+Na punt 19 (TextInput focus/zichtbaarheid gefixt) gaf de gebruiker aan
+geen noodzaak te zien om het "Naam:"-veld op de vak-bewerkpagina (pagina 3)
+uberhaupt te behouden -- gewoon weghalen. De ROW_INPUT-rij (`key="slotName"`)
+is verwijderd uit `buildSlotEditRows`, en de bijbehorende opslaan-aanroep
+(`RealSiloEvents.sendSlotName(...)`) is verwijderd uit `onConfirmSlot` --
+die riep anders bij elke Opslaan een LEGE naam-waarde door (`getConfigValue`
+geeft `nil`/`""` terug voor een rij die niet meer bestaat), wat elke keer
+een eventueel al ingestelde vaknaam stilzwijgend zou hebben gewist. De
+onderliggende infrastructuur (`RealSiloCompartmentStorage.setSlotName`,
+`RealSiloSlotNameEvent`, XML save/load van `slot.name`) is INTACT gelaten --
+alleen de GUI-invoer is weg, dus een naam die via XML/map-config of een
+eerdere sessie al gezet is blijft gewoon zichtbaar in de rij-header
+("Silo 2: <naam>"), alleen niet meer via dit menu te wijzigen. De nu
+verweesde vertaalsleutel `realSilo_slotNameLabel` is verwijderd uit alle
+drie de taalbestanden (zelfde discipline als punt 20: een gat dat niet
+meer bestaat, hoort geen dode code/vertaling achter te laten).
 
 ---
 

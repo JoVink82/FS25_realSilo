@@ -49,6 +49,14 @@ function realSiloManager.register(placeable, savedId, savedConfig)
         cfg.extensionRange = realSiloManager.DEFAULT_EXTENSION_RANGE or 50
     end
 
+    -- Droger-standaard: geen opgeslagen/XML-waarde bekend -> silo heeft
+    -- een droger (zo werkte drogen altijd al, vóór deze instelling
+    -- bestond; nieuwe silo's en oude savegames zonder deze vlag mogen
+    -- daardoor niet ineens hun droogfunctie verliezen).
+    if cfg.hasDryer == nil then
+        cfg.hasDryer = true
+    end
+
     realSiloManager.silos[uniqueId] = {
         uniqueId = uniqueId,
         placeable = placeable,
@@ -193,12 +201,14 @@ function realSiloManager.setConfigured(uid)
 end
 
 -- ============================================================
--- Droger-configuratie: LEGACY, niet meer functioneel gebruikt.
--- MoistureSystem beheert drogen nu zelf, native, op het actieve vak
--- van de silo (geen blokkade/override meer vanuit realSilo). Deze
--- vlag en de onderstaande dryingTransfers-boekhouding blijven staan
--- als onschadelijke, ongebruikte data zodat oude savegames/XML met
--- een dryer="true"-attribuut niet stuklopen.
+-- Droger-configuratie: per silo aan/uit-schakelbaar (menu-instelling,
+-- zie RealSiloDialog.lua). Bepaalt of realSiloDryerCompat.lua deze
+-- silo's vakken uberhaupt in FS25_MoistureSystem's Grain Drying-menu
+-- toont. Standaard TRUE (zie realSiloManager.register hierboven) zodat
+-- bestaande silo's/savegames van vóór deze instelling gewoon kunnen
+-- blijven drogen zoals voorheen; de admin kan het per silo uitzetten.
+-- Kan ook door de map-/silomodel-XML vastgelegd (niet aanpasbaar) worden
+-- via het dryer-attribuut, zie realSiloHook.lua (config.dryerXmlFixed).
 -- ============================================================
 function realSiloManager.hasDryer(uid)
     local silo = realSiloManager.silos[uid]

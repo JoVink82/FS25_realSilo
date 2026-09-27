@@ -232,6 +232,21 @@ function RealSiloDryerCompat.toggleDrying(uid, slotIndex)
 end
 
 -- ----------------------------------------------------------------
+-- Leest alleen de huidige droog-status van een vak, zonder 'm te
+-- wijzigen. Gebruikt door RealSiloDialog.lua om de droger direct
+-- vanuit het realSilo-menu (pagina 3, vak bewerken) te kunnen tonen
+-- en starten/stoppen, naast FS25_MoistureSystem's eigen Shift+M
+-- Grain Drying-menu. Werkt zonder een volledige proxy (net als
+-- applyDryingState) -- DryingSystem:isDrying() kijkt alleen naar de
+-- uniqueId-string.
+-- ----------------------------------------------------------------
+function RealSiloDryerCompat.isDrying(uid, slotIndex)
+    local ds = g_currentMission and g_currentMission.dryingSystem
+    if ds == nil then return false end
+    return ds:isDrying(RealSiloDryerCompat.buildVirtualId(uid, slotIndex)) == true
+end
+
+-- ----------------------------------------------------------------
 -- Aangeroepen op ELKE ontvanger (client of server) van de
 -- RealSiloDryerToggleEvent-broadcast. In tegenstelling tot toggleDrying
 -- hierboven is hier GEEN volledige proxy nodig -- setDryingState kijkt
@@ -242,6 +257,42 @@ function RealSiloDryerCompat.applyDryingState(uid, slotIndex, newState)
     local ds = g_currentMission and g_currentMission.dryingSystem
     if ds == nil then return end
     ds:setDryingState(RealSiloDryerCompat.buildVirtualId(uid, slotIndex), newState)
+end
+
+-- ----------------------------------------------------------------
+-- "Wel of geen droger" wordt voor deze silo UITgezet terwijl een vak
+-- al aan het drogen was: de silo verdwijnt dan uit getOwnedDryables
+-- (zie installOwnedDryablesSplit hierboven) en is dus niet meer
+-- zichtbaar/selecteerbaar in het Grain Drying-menu -- maar
+-- DryingSystem.activeDryers (een simpele, per-machine Lua-set) zou
+-- zonder deze stap stiekem AAN blijven staan: nog steeds actief in de
+-- uur-tick, en met een activeDryers-staat die client en server uit
+-- elkaar kan laten lopen zodra de instelling later weer aangezet
+-- wordt. Daarom: bij het uitzetten van de droger voor een silo, elk
+-- vak dat op dat moment drogend is expliciet stoppen, en dat resultaat
+-- -- net als een gewone toggle-klik -- naar alle clients broadcasten
+-- (RealSiloDryerToggleEvent). Aangeroepen vanuit
+-- RealSiloConfigEvent.apply (realSiloEvents.lua), alleen op de server
+-- (die is altijd autoritatief voor drogen; broadcasten mag dus alleen
+-- als g_server bestaat).
+-- ----------------------------------------------------------------
+function RealSiloDryerCompat.stopAllDryingForSilo(uid)
+    local ds = g_currentMission and g_currentMission.dryingSystem
+    if ds == nil then return end
+    local data = RealSiloCompartmentStorage.siloSlots[uid]
+    if not data or not data.slots then return end
+
+    for slotIndex = 1, #data.slots do
+        local virtualId = RealSiloDryerCompat.buildVirtualId(uid, slotIndex)
+        if ds:isDrying(virtualId) then
+            ds:setDryingState(virtualId, false)
+            if g_server ~= nil then
+                g_server:broadcastEvent(
+                    RealSiloDryerToggleEvent.new(uid, slotIndex, false, true),
+                    true, nil, nil)
+            end
+        end
+    end
 end
 
 -- v14c -- BUGFIX: de metatable-truc (getmetatable(instance).__index)
@@ -276,11 +327,18 @@ local function installOwnedDryablesSplit(instance)
         for _, placeable in ipairs(result) do
             local uid = placeable.realSiloUniqueId
             if uid ~= nil then
-                local data = RealSiloCompartmentStorage.siloSlots[uid]
-                if data and data.slots then
-                    for slotIndex = 1, #data.slots do
-                        local proxy = buildProxyPlaceable(uid, slotIndex)
-                        if proxy then table.insert(final, proxy) end
+                -- "Wel of geen droger": een silo waarvan de admin (of de
+                -- map-/silomodel-XML, zie realSiloManager.hasDryer) drogen
+                -- heeft uitgezet, verschijnt HELEMAAL NIET in de
+                -- dryables-lijst -- geen van zijn vakken, dus ook niet
+                -- vindbaar/selecteerbaar in het Grain Drying-menu.
+                if realSiloManager.hasDryer(uid) then
+                    local data = RealSiloCompartmentStorage.siloSlots[uid]
+                    if data and data.slots then
+                        for slotIndex = 1, #data.slots do
+                            local proxy = buildProxyPlaceable(uid, slotIndex)
+                            if proxy then table.insert(final, proxy) end
+                        end
                     end
                 end
             else

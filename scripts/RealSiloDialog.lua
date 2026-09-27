@@ -8,16 +8,17 @@ RealSiloDialog = {}
 local RealSiloDialog_mt = Class(RealSiloDialog, MessageDialog)
 
 -- Rij-types voor de config lijst
-local ROW_INFO  = 1  -- informatietekst
-local ROW_CALC  = 2  -- berekening (groen)
-local ROW_INPUT = 3  -- label + invoerveld
+local ROW_INFO   = 1  -- informatietekst
+local ROW_CALC   = 2  -- berekening (groen)
+local ROW_INPUT  = 3  -- label + invoerveld
+local ROW_TOGGLE = 4  -- label + natieve AAN/UIT-knop (BinaryOption, profiel fs25_binaryOption)
 
 RealSiloDialog.CONTROLS = {
     "pageOverview", "pageConfig", "pageEditSlot", "pageTransfer",
     "compartmentList", "listSlider",
     "configList", "configListSliderBox",
     "activeSlotInfo",
-    "transferStatus", "buttonAction", "buttonTransfer", "buttonClose",
+    "transferStatus", "buttonAction", "buttonTransfer", "buttonDryer", "buttonClose",
 }
 
 RealSiloDialog.currentUniqueId  = nil
@@ -55,6 +56,19 @@ function RealSiloDialog:update(dt)
             self.compartmentList:reloadData()
             self:updateTransferStatus()
         end
+    elseif self.currentPage == 6 then
+        -- Drogen-pagina: ook verversen terwijl open, zodat een vak dat
+        -- vanzelf klaar is met drogen (of door een ander vak-lid gestart/
+        -- gestopt is) hier zichtbaar bijblijft.
+        self._refreshTimer = (self._refreshTimer or 0) + dt
+        if self._refreshTimer >= 1000 then
+            self._refreshTimer = 0
+            local uid = RealSiloDialog.currentUniqueId
+            if uid then
+                self:buildDryerRows(uid)
+                self.configList:reloadData()
+            end
+        end
     end
 end
 
@@ -71,6 +85,9 @@ function RealSiloDialog:onOpen()
     if self.buttonTransfer and InputAction.REALSILO_TRANSFER then
         self.buttonTransfer:setInputAction(InputAction.REALSILO_TRANSFER)
     end
+    if self.buttonDryer and InputAction.REALSILO_DRYER then
+        self.buttonDryer:setInputAction(InputAction.REALSILO_DRYER)
+    end
 
     -- Registreer T-toets voor Transfer (naast de knop)
     if g_inputBinding and InputAction.REALSILO_TRANSFER then
@@ -81,6 +98,19 @@ function RealSiloDialog:onOpen()
         if eventId then
             g_inputBinding:setActionEventText(eventId,
                 g_i18n:getText("realSilo_transfer") or "Transfer")
+        end
+    end
+
+    -- Registreer G-toets voor Drogen, naast de zichtbare footer-knop
+    -- (buttonDryer) -- zelfde opzet als T-toets + Transfer-knop hierboven.
+    if g_inputBinding and InputAction.REALSILO_DRYER then
+        local _, eventId = g_inputBinding:registerActionEvent(
+            InputAction.REALSILO_DRYER, self, self.onClickDryer,
+            false, true, false, true)
+        self._dryerActionEventId = eventId
+        if eventId then
+            g_inputBinding:setActionEventText(eventId,
+                g_i18n:getText("realSilo_dryerMenuTitle") or "Drogen")
         end
     end
 
@@ -120,6 +150,10 @@ function RealSiloDialog:onClose()
     if self._transferActionEventId and g_inputBinding then
         g_inputBinding:removeActionEvent(self._transferActionEventId)
         self._transferActionEventId = nil
+    end
+    if self._dryerActionEventId and g_inputBinding then
+        g_inputBinding:removeActionEvent(self._dryerActionEventId)
+        self._dryerActionEventId = nil
     end
     self.compartmentEntries = {}
     self.configRows = {}
@@ -177,7 +211,7 @@ function RealSiloDialog:showPage(pageNum)
     local isConfigured= uid and realSiloManager.isConfigured(uid) or false
 
     local showList   = (pageNum == 1)
-    local showConfig = (pageNum == 2 or pageNum == 3 or pageNum == 4 or pageNum == 5)
+    local showConfig = (pageNum == 2 or pageNum == 3 or pageNum == 4 or pageNum == 5 or pageNum == 6)
 
     self.compartmentList:setVisible(showList)
     self.listSlider:setVisible(showList)
@@ -196,6 +230,15 @@ function RealSiloDialog:showPage(pageNum)
         self.buttonTransfer:setVisible(pageNum == 1)
     end
 
+    -- Drogen-knop: alleen op pagina 1 EN alleen als drogen voor deze silo
+    -- ook echt bruikbaar is (zelfde gate als onClickDryer/buildDryerRows) --
+    -- anders een knop die altijd meteen een foutmelding geeft.
+    local dryerUsable = uid and realSiloManager.hasDryer(uid)
+        and g_currentMission and g_currentMission.dryingSystem ~= nil
+    if self.buttonDryer then
+        self.buttonDryer:setVisible(pageNum == 1 and dryerUsable == true)
+    end
+
     if pageNum == 1 then
         self.dialogTitleElement:setText(displayName .. " – " .. g_i18n:getText("realSilo_overview"))
         self.buttonAction:setText((g_i18n:getText("realSilo_settings") or "Settings"))
@@ -205,6 +248,9 @@ function RealSiloDialog:showPage(pageNum)
         if self.buttonTransfer then
             self.buttonTransfer:setVisible(true)
             self.buttonTransfer:setText((g_i18n:getText("realSilo_transfer") or "Transfer"))
+        end
+        if self.buttonDryer then
+            self.buttonDryer:setText((g_i18n:getText("realSilo_dryerMenuTitle") or "Drying"))
         end
 
     elseif pageNum == 2 then
@@ -248,7 +294,7 @@ function RealSiloDialog:showPage(pageNum)
         self.dialogTitleElement:setText(string.format("%s – %s %d",
             displayName, g_i18n:getText("realSilo_compartment"), slotIdx))
         self.buttonAction:setText((g_i18n:getText("realSilo_save") or "Save"))
-        self:buildSlotEditRows(slotIdx, slot, naam)
+        self:buildSlotEditRows(uid, slotIdx, slot, naam)
         self.configList:reloadData()
         self:setSoundSuppressed(true)
         FocusManager:setFocus(self.configList)
@@ -270,6 +316,21 @@ function RealSiloDialog:showPage(pageNum)
             self.activeSlotInfo:setVisible(true)
         end
         self:buildExtensionRows(uid)
+        self.configList:reloadData()
+        self:setSoundSuppressed(true)
+        FocusManager:setFocus(self.configList)
+        self:setSoundSuppressed(false)
+
+    elseif pageNum == 6 then
+        self.dialogTitleElement:setText(displayName .. " – " .. (g_i18n:getText("realSilo_dryerMenuTitle") or "Drogen"))
+        self.buttonAction:setText((g_i18n:getText("realSilo_close") or "Sluiten"))
+        if self.buttonTransfer then self.buttonTransfer:setVisible(false) end
+        if self.activeSlotInfo then
+            self.activeSlotInfo:setText(g_i18n:getText("realSilo_dryerMenuHint")
+                or "Klik op een vak om het drogen aan of uit te zetten.")
+            self.activeSlotInfo:setVisible(true)
+        end
+        self:buildDryerRows(uid)
         self.configList:reloadData()
         self:setSoundSuppressed(true)
         FocusManager:setFocus(self.configList)
@@ -307,13 +368,15 @@ function RealSiloDialog:buildConfigRows(uid, silo)
     end
     table.insert(self.configRows, { type=ROW_INFO, text=statusTxt })
 
-    -- Aantal vakken invoer
+    -- Aantal vakken: natieve pijltjes-selector (1-32) i.p.v. tekstveld,
+    -- zelfde stijl als FS25's eigen instellingenmenu.
     table.insert(self.configRows, { type=ROW_INPUT,
         label   = g_i18n:getText("realSilo_askNumCompartments"),
         value   = tostring(silo and silo.config.numCompartments or 4),
-        maxChar = 2,
         key     = "numComps",
-        digits  = true,
+        stepper = true,
+        min     = 1,
+        max     = 32,
     })
 
     -- Naam invoer
@@ -325,25 +388,61 @@ function RealSiloDialog:buildConfigRows(uid, silo)
         digits  = false,
     })
 
-    -- Transfer snelheid
+    -- Transfer snelheid: natieve pijltjes-selector, stapgrootte 1000
+    -- (zelfde stijl als "Aantal silo's"). Max 50000 L/min (50 stappen) --
+    -- ruim boven elke realistische waarde, en ruim onder de 65535-grens
+    -- van het 16-bit streamveld in RealSiloConfigEvent (realSiloEvents.lua).
     local transferRate = (silo and silo.config.transferRate) or 1000
     table.insert(self.configRows, { type=ROW_INPUT,
         label   = g_i18n:getText("realSilo_transferRate"),
         value   = tostring(math.floor(transferRate)),
-        maxChar = 6,
         key     = "transferRate",
-        digits  = true,
+        stepper = true,
+        min     = 1000,
+        max     = 50000,
+        step    = 1000,
     })
 
-    -- Zoekbereik voor extensions (meters)
+    -- Zoekbereik voor extensions (meters): natieve pijltjes-selector,
+    -- stapgrootte 1 (bereik 1-300, zelfde grenzen als de bestaande clamp
+    -- in onConfirm hieronder).
     local extRange = (silo and silo.config.extensionRange) or 50
     table.insert(self.configRows, { type=ROW_INPUT,
         label   = g_i18n:getText("realSilo_extensionRange"),
         value   = tostring(math.floor(extRange)),
-        maxChar = 3,
         key     = "extensionRange",
-        digits  = true,
+        stepper = true,
+        min     = 1,
+        max     = 300,
     })
+
+    -- Wel of geen droger. Is dit door de map-/silomodel-XML vastgelegd
+    -- (dryerXmlFixed), dan is de instelling read-only: alleen tonen,
+    -- niet als klikbare toggle.
+    local dryerLabel = g_i18n:getText("realSilo_hasDryer") or "Droger beschikbaar"
+    local hasDryerVal = true
+    if silo then hasDryerVal = realSiloManager.hasDryer(uid) end
+    local dryerFixed = false
+    if silo then dryerFixed = (silo.config.dryerXmlFixed == true) end
+    if dryerFixed then
+        table.insert(self.configRows, { type=ROW_INFO,
+            text = string.format("%s: %s (%s)", dryerLabel,
+                hasDryerVal and (g_i18n:getText("realSilo_on") or "Aan") or (g_i18n:getText("realSilo_off") or "Uit"),
+                g_i18n:getText("realSilo_lockedByMod")),
+        })
+    else
+        table.insert(self.configRows, { type=ROW_TOGGLE,
+            label = dryerLabel,
+            value = hasDryerVal,
+            key   = "hasDryer",
+        })
+    end
+
+    -- Vindbaarheid van de Drogen-pagina: sinds de footer-knop (buttonDryer,
+    -- zichtbaar op pagina 1) heeft de instellingenpagina zelf GEEN eigen
+    -- hint-rij meer nodig -- gaf op verzoek te veel rommel op een pagina
+    -- die al druk genoeg is. De knop (+ de G-toets) op het overzicht is nu
+    -- de enige vindbaarheids-route.
 
     -- Berekening rij
     table.insert(self.configRows, { type=ROW_CALC,
@@ -366,7 +465,7 @@ end
 -- ================================================================
 -- Slot-edit lijst rijen bouwen (pagina 3)
 -- ================================================================
-function RealSiloDialog:buildSlotEditRows(slotIdx, slot, naam)
+function RealSiloDialog:buildSlotEditRows(uid, slotIdx, slot, naam)
     self.configRows = {}
     self._editSlotFilled = (slot.fillLevel > 0)
 
@@ -377,16 +476,6 @@ function RealSiloDialog:buildSlotEditRows(slotIdx, slot, naam)
     table.insert(self.configRows, { type=ROW_INFO,
         text = string.format("%s %d: %s  |  %s",
             g_i18n:getText("realSilo_compartment"), slotIdx, naam, infoTxt)
-    })
-
-    -- Naam-invoerveld: altijd bewerkbaar (ook als het vak gevuld is).
-    -- Leeg = standaardnaam (Silo N).
-    table.insert(self.configRows, { type=ROW_INPUT,
-        label   = g_i18n:getText("realSilo_slotNameLabel") or "Naam",
-        value   = slot.name or "",
-        maxChar = 24,
-        key     = "slotName",
-        digits  = false,
     })
 
     if slot.fillLevel > 0 then
@@ -529,20 +618,36 @@ function RealSiloDialog:populateConfigCell(index, cell)
     local labelEl = cell:getAttribute("rowLabel")
     local inputEl = cell:getAttribute("rowInput")
 
+    -- Breed label (rowLabelWide, 2 regels) voor ROW_INFO/ROW_CALC: voorkomt
+    -- dat lange informatiezinnen afgekapt worden met "...".
+    local labelWideEl = cell:getAttribute("rowLabelWide")
+
+    -- ROW_TOGGLE: natieve AAN/UIT-knop (BinaryOption, profiel
+    -- fs25_binaryOption) op dezelfde plek als rowInput, hetzelfde widget
+    -- als het spel se eigen instellingenmenu.
+    local toggleEl = cell:getAttribute("rowToggle")
+
+    -- ROW_INPUT met row.stepper=true: natieve pijltjes-selector
+    -- (MultiTextOption, profiel fs25_multiTextOption), zelfde plek.
+    local stepperEl = cell:getAttribute("rowStepper")
+
     -- Begin met alles verbergen
     if labelEl then labelEl:setVisible(false) end
+    if labelWideEl then labelWideEl:setVisible(false) end
     if inputEl then inputEl:setVisible(false) end
+    if toggleEl then toggleEl:setVisible(false) end
+    if stepperEl then stepperEl:setVisible(false) end
 
     if row.type == ROW_INFO then
-        -- Info-tekst in het label-veld, zonder invoerveld
-        if labelEl then
-            labelEl:setText(row.text or "")
-            labelEl:setVisible(true)
+        -- Info-tekst in het brede label-veld (2 regels), zonder invoerveld
+        if labelWideEl then
+            labelWideEl:setText(row.text or "")
+            labelWideEl:setVisible(true)
         end
 
     elseif row.type == ROW_CALC then
-        -- Berekend resultaat in het label-veld
-        if labelEl then
+        -- Berekend resultaat in het brede label-veld (2 regels)
+        if labelWideEl then
             local numStr = self:getConfigValue("numComps") or tostring(row.numComps)
             local n = tonumber(numStr)
             local tekst = ""
@@ -554,12 +659,43 @@ function RealSiloDialog:populateConfigCell(index, cell)
                     tekst = tekst .. string.format("  +%s [EXT]", g_i18n:formatVolume(row.extCap, 0))
                 end
             end
-            labelEl:setText(tekst)
-            labelEl:setVisible(true)
+            labelWideEl:setText(tekst)
+            labelWideEl:setVisible(true)
         end
 
     elseif row.type == ROW_INPUT then
-        if labelEl and inputEl then
+        if row.stepper then
+            -- Natieve pijltjes-selector i.p.v. tekstveld (bv. "Aantal silo's").
+            if labelEl then
+                labelEl:setText(row.label or "")
+                labelEl:setVisible(true)
+            end
+            if stepperEl then
+                -- row.step (standaard 1): stapgrootte tussen twee waarden,
+                -- bv. 1000 voor "Speed (L/min)" of 1 voor "Aantal silo's"/
+                -- "Extension search range". De texts-lijst bevat dus
+                -- row.min, row.min+step, row.min+2*step, ... t/m row.max.
+                local step = row.step or 1
+                local texts = {}
+                local n = row.min
+                while n <= row.max do
+                    table.insert(texts, tostring(n))
+                    n = n + step
+                end
+                stepperEl:setTexts(texts)
+
+                local val = tonumber(row.value) or row.min
+                val = math.max(row.min, math.min(row.max, val))
+                -- Rond af op het dichtstbijzijnde stap-veelvoud (bv. een
+                -- oude, handmatig ingevoerde waarde die niet precies op de
+                -- step-grid ligt) en klem op het aantal texts-opties.
+                local stepsFromMin = math.floor((val - row.min) / step + 0.5)
+                stepsFromMin = math.max(0, math.min(#texts - 1, stepsFromMin))
+                stepperEl.rsConfigRowIndex = index
+                stepperEl:setState(stepsFromMin + 1, false)
+                stepperEl:setVisible(true)
+            end
+        elseif labelEl and inputEl then
             labelEl:setText(row.label or "")
             labelEl:setVisible(true)
             -- maxCharacters EERST, dan setText (voorkomt afkappen bij recycling)
@@ -568,8 +704,80 @@ function RealSiloDialog:populateConfigCell(index, cell)
             inputEl:setVisible(true)
             row._inputElement = inputEl
         end
+
+    elseif row.type == ROW_TOGGLE then
+        if labelEl then
+            labelEl:setText(row.label or "")
+            labelEl:setVisible(true)
+        end
+        if toggleEl then
+            -- Zodat onClickConfigToggle (natieve klik-callback) weet bij
+            -- welke configRows-rij deze (herbruikte) celinstantie hoort.
+            toggleEl.rsConfigRowIndex = index
+            toggleEl:setIsChecked(row.value == true, true) -- skipAnimation=true, geen forceEvent (geen callback bij programmatisch zetten)
+            toggleEl:setVisible(true)
+        end
     end
 end
+
+-- Klik-callback van de natieve BinaryOption-knop (fs25_binaryOption) in
+-- een ROW_TOGGLE-rij.
+--
+-- BELANGRIJK (in-game gevonden fout, zie CLAUDE.md): het eerste argument
+-- dat Giants' onClickCallback hier doorgeeft is NIET het element zelf,
+-- maar `state` (een getal) — vandaar de eerdere crash "attempt to index
+-- number with 'rsConfigRowIndex'". Het daadwerkelijke element wordt
+-- daarom via `FocusManager:getFocusedElement()` opgehaald: zowel
+-- BinaryOptionElement als MultiTextOptionElement roepen intern
+-- `FocusManager:setFocus(self)` synchroon aan vóórdat de klik-callback
+-- wordt aangeroepen (zie onLeftButtonClicked/onRightButtonClicked in de
+-- gedecompileerde bron), dus op het moment dat deze functie draait is dat
+-- element gegarandeerd het zojuist aangeklikte element. Het element
+-- onthoudt via rsConfigRowIndex (gezet in populateConfigCell) bij welke
+-- configRows-rij het hoort, zodat het werkt ongeacht welke (herbruikte)
+-- SmoothList-cel toevallig is aangeklikt.
+function RealSiloDialog:onClickConfigToggle(state)
+    local element = FocusManager:getFocusedElement()
+    if type(element) ~= "table" then return end
+    local index = element.rsConfigRowIndex
+    local row = index and self.configRows[index]
+    if not row or row.type ~= ROW_TOGGLE then return end
+
+    row.value = element:getIsChecked() == true
+    -- immediate=true (bv. de Drogen-pagina): meteen toepassen via
+    -- onToggle, geen aparte "Opslaan"-stap zoals de config-pagina's.
+    if row.immediate and row.onToggle then
+        row.onToggle(row.value)
+    end
+end
+
+-- Klik-callback van de natieve MultiTextOption-pijltjes (fs25_multiTextOption)
+-- in een ROW_INPUT-rij met stepper=true (bv. "Aantal silo's"). Zelfde
+-- FocusManager-aanpak als onClickConfigToggle hierboven, om dezelfde reden.
+function RealSiloDialog:onClickConfigStepper(state)
+    local element = FocusManager:getFocusedElement()
+    if type(element) ~= "table" then return end
+    local index = element.rsConfigRowIndex
+    local row = index and self.configRows[index]
+    if not row or row.type ~= ROW_INPUT or not row.stepper then return end
+
+    local st = element:getState()
+    local step = row.step or 1
+    row.value = tostring((row.min or 1) + (st - 1) * step)
+end
+
+-- Lees huidige waarde van een ROW_TOGGLE-rij (true/false), of nil als
+-- die rij niet bestaat (bv. dryerXmlFixed toont ROW_INFO in plaats van
+-- ROW_TOGGLE, dus dan is er niets om te lezen/wijzigen).
+function RealSiloDialog:getConfigToggleValue(key)
+    for _, row in ipairs(self.configRows) do
+        if row.type == ROW_TOGGLE and row.key == key then
+            return row.value == true
+        end
+    end
+    return nil
+end
+
 -- Lees huidige waarde van een config-veld
 -- Gebruik de cel-referentie als beschikbaar, anders de opgeslagen waarde
 function RealSiloDialog:getConfigValue(key)
@@ -611,6 +819,8 @@ function RealSiloDialog:onRowInputUnicode(unicode)
                 return true
             end
         end
+        -- ROW_TOGGLE gebruikt geen tekstinvoer (natieve BinaryOption-knop,
+        -- zie onClickConfigToggle) en is dus hier niet relevant.
     end
     return true
 end
@@ -645,6 +855,22 @@ function RealSiloDialog:refreshList()
 end
 
 function RealSiloDialog:onListClick(list, section, index)
+    if list == self.configList then
+        -- ROW_TOGGLE/stepper-rijen worden al bediend via hun eigen native
+        -- widget (onClickConfigToggle/onClickConfigStepper). Voor een
+        -- gewoon tekstveld (ROW_INPUT zonder stepper, bv. "Naam:") zet dit
+        -- expliciet de focus op het TextInput bij een klik ergens op de
+        -- rij -- gemeld dat een leeg tekstveld (geen bestaande waarde om
+        -- op te klikken) onbereikbaar leek. Zelfde FocusManager-patroon
+        -- als de native widgets hierboven.
+        local row = index and self.configRows[index]
+        if row and row.type == ROW_INPUT and not row.stepper and row._inputElement then
+            self:setSoundSuppressed(true)
+            FocusManager:setFocus(row._inputElement)
+            self:setSoundSuppressed(false)
+        end
+        return
+    end
     if list ~= self.compartmentList then return end
     if not index or index < 1 or index > #self.compartmentEntries then return end
     if index == self.selectedIndex then return end
@@ -741,6 +967,13 @@ function RealSiloDialog:onClickAction()
         self:onConfirmTransfer()
     elseif self.currentPage == 5 then
         self:onConfirmExtensions()
+    elseif self.currentPage == 6 then
+        -- Drogen-pagina past meteen toe bij elke klik (geen batch/Opslaan-
+        -- stap zoals de andere pagina's) -- deze knop is hier dus gewoon
+        -- "Sluiten"/terug naar het overzicht.
+        self:showPage(1)
+        self:refreshList()
+        self.compartmentList:reloadData()
     end
 end
 
@@ -756,6 +989,31 @@ function RealSiloDialog:onClickTransfer()
         return
     end
     self:showPage(4)
+end
+
+-- ================================================================
+-- Drogen-pagina openen (G-toets, zie onOpen). Rechtstreeks vanuit het
+-- realSilo-menu drogen starten/stoppen per vak, naast FS25_MoistureSystem's
+-- eigen Shift+M Grain Drying-menu. Werkt vanaf elke pagina (zelfde opzet
+-- als onClickTransfer/de T-toets hierboven).
+-- ================================================================
+function RealSiloDialog:onClickDryer()
+    local uid = RealSiloDialog.currentUniqueId
+    if not uid then return end
+
+    local ds = g_currentMission and g_currentMission.dryingSystem
+    if ds == nil then
+        g_currentMission:addIngameNotification(FSBaseMission.INGAME_NOTIFICATION_INFO,
+            g_i18n:getText("realSilo_dryerNotAvailable") or "FS25_MoistureSystem is niet actief.")
+        return
+    end
+    if not realSiloManager.hasDryer(uid) then
+        g_currentMission:addIngameNotification(FSBaseMission.INGAME_NOTIFICATION_INFO,
+            g_i18n:getText("realSilo_dryerOffForSilo") or "Deze silo heeft geen droger (zie instellingen).")
+        return
+    end
+
+    self:showPage(6)
 end
 
 function RealSiloDialog:onCancel()
@@ -778,7 +1036,8 @@ function RealSiloDialog:onCancel()
         return
     end
 
-    if self.currentPage == 2 or self.currentPage == 3 or self.currentPage == 4 or self.currentPage == 5 then
+    if self.currentPage == 2 or self.currentPage == 3 or self.currentPage == 4
+       or self.currentPage == 5 or self.currentPage == 6 then
         self:showPage(1)
         self:refreshList()
         self.compartmentList:reloadData()
@@ -820,6 +1079,13 @@ function RealSiloDialog:onConfirm()
     local cap        = math.max(math.floor(totalCap / numComps), 1000)
     local isConfigured = realSiloManager.isConfigured(uid)
 
+    -- Wel of geen droger. Geen ROW_TOGGLE gevonden (dryerXmlFixed toont
+    -- alleen ROW_INFO) -> instelling is vastgelegd door de mod, huidige
+    -- waarde behouden in plaats van te wijzigen.
+    local hasDryerVal = self:getConfigToggleValue("hasDryer")
+    if hasDryerVal == nil then
+        hasDryerVal = realSiloManager.hasDryer(uid)
+    end
 
     if isConfigured then
         -- Controleer of silo leeg is bij ELKE config-wijziging (ook alleen naam is OK)
@@ -839,7 +1105,7 @@ function RealSiloDialog:onConfirm()
         end
     end
 
-    local ok, err = RealSiloEvents.sendConfig(uid, numComps, cap, naam, transferRate, extRange)
+    local ok, err = RealSiloEvents.sendConfig(uid, numComps, cap, naam, transferRate, extRange, hasDryerVal)
     if ok then
         local silo = realSiloManager.getSilo(uid)
         local msg = string.format(g_i18n:getText("realSilo_configSaved"),
@@ -956,10 +1222,6 @@ function RealSiloDialog:onConfirmSlot()
     if not uid or not slotIdx then self:showPage(1); return end
 
     self:saveConfigValues()
-
-    -- Naam altijd opslaan (ook als het vak gevuld is)
-    local newName = self:getConfigValue("slotName") or ""
-    RealSiloEvents.sendSlotName(uid, slotIdx, newName)
 
     local slots = RealSiloCompartmentStorage.getSlots(uid)
     local slot  = slots and slots[slotIdx]
@@ -1146,6 +1408,82 @@ function RealSiloDialog:onConfirmExtensions()
     self:showPage(1)
     self:refreshList()
     self.compartmentList:reloadData()
+end
+
+-- ================================================================
+-- Pagina 6: Drogen -- alle droogbare vakken van deze silo (hoofdsilo +
+-- extensions), elk met een AAN/UIT-vak (ROW_TOGGLE, immediate=true: past
+-- meteen toe bij klikken, geen "Opslaan"-stap zoals de andere pagina's).
+-- ================================================================
+function RealSiloDialog:buildDryerRows(uid)
+    self.configRows = {}
+    local ds = g_currentMission and g_currentMission.dryingSystem
+    if ds == nil then
+        table.insert(self.configRows, { type=ROW_INFO,
+            text = g_i18n:getText("realSilo_dryerNotAvailable") or "FS25_MoistureSystem is niet actief." })
+        return
+    end
+    if not uid or not realSiloManager.hasDryer(uid) then
+        table.insert(self.configRows, { type=ROW_INFO,
+            text = g_i18n:getText("realSilo_dryerOffForSilo") or "Deze silo heeft geen droger (zie instellingen)." })
+        return
+    end
+
+    -- Voor vocht%/grade hieronder (zelfde databron/helper als de
+    -- Overview-pagina, RealSiloMoistureCompat.getCompartmentLabel).
+    local siloData = RealSiloCompartmentStorage.siloSlots[uid]
+
+    local slots = RealSiloCompartmentStorage.getSlots(uid) or {}
+    local any = false
+    for _, slot in ipairs(slots) do
+        if slot.fillType and slot.fillType ~= 0 and slot.fillLevel and slot.fillLevel > 0 then
+            any = true
+            local naam = g_i18n:getText("realSilo_empty")
+            local d = g_fillTypeManager:getFillTypeByIndex(slot.fillType)
+            if d then naam = d.title or d.name or "?" end
+            local slotIndex = slot.index
+            local isDryingNow = RealSiloDryerCompat.isDrying(uid, slotIndex)
+
+            -- Extra info, in dezelfde geest als FS25_MoistureSystem's eigen
+            -- Grain Drying-tabel (NAME/STATE/CROPS): vocht% + kwaliteitsgrade
+            -- (bestaande, al elders gebruikte helper -- geen nieuwe,
+            -- ongeverifieerde MoistureSystem-aanroep) en een simpel
+            -- drogend/inactief-label. Een exacte ETA zoals in die tabel
+            -- kunnen we NIET betrouwbaar tonen: DryingSystem's interne
+            -- rekenmethode daarvoor is nergens als Lua-bron beschikbaar om
+            -- te verifiëren (zelfde reden als de eerdere
+            -- onClickCallback-aanname die een echte crash gaf, zie
+            -- CLAUDE.md) -- voor een precieze resterende tijd blijft
+            -- FS25_MoistureSystem's eigen Shift+M-menu de bron.
+            local moistureLabel = ""
+            if RealSiloMoistureCompat and siloData then
+                local ownerPlaceable = slot.isExtension and slot.extPlaceable or siloData.placeable
+                if ownerPlaceable then
+                    moistureLabel = RealSiloMoistureCompat.getCompartmentLabel(
+                        ownerPlaceable, slot.fillType, slot, uid, slotIndex)
+                end
+            end
+            local stateText = isDryingNow
+                and (g_i18n:getText("realSilo_dryerStateDrying") or "Drying")
+                or (g_i18n:getText("realSilo_dryerStateIdle") or "Idle")
+
+            table.insert(self.configRows, { type=ROW_TOGGLE,
+                label     = string.format("%s %d: %s%s  \xC2\xB7  %s",
+                    g_i18n:getText("realSilo_compartment"), slotIndex, naam, moistureLabel, stateText),
+                value     = isDryingNow,
+                key       = "dryer_" .. tostring(slotIndex),
+                immediate = true,
+                onToggle  = function(newValue)
+                    RealSiloEvents.sendDryerToggle(uid, slotIndex)
+                end,
+            })
+        end
+    end
+
+    if not any then
+        table.insert(self.configRows, { type=ROW_INFO,
+            text = g_i18n:getText("realSilo_dryerNoFilledSlots") or "Geen gevulde vakken om te drogen." })
+    end
 end
 
 -- ================================================================

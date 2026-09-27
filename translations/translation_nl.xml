@@ -67,5 +67,16 @@
         <text name="realSilo_transferBlockedDrying" text="Transfer niet mogelijk: deze silo wordt op dit moment gedroogd."/>
         <text name="input_REALSILO_OPEN" text="RealSilo openen"/>
         <text name="realSilo_extensionRange" text="Zoekbereik extensions (m):"/>
+        <text name="realSilo_hasDryer" text="Droger beschikbaar:"/>
+        <text name="realSilo_on" text="Aan"/>
+        <text name="realSilo_off" text="Uit"/>
+        <text name="realSilo_dryerMenuTitle" text="Drogen"/>
+        <text name="realSilo_dryerMenuHint" text="Klik op een vak om het drogen aan of uit te zetten."/>
+        <text name="realSilo_dryerNotAvailable" text="FS25_MoistureSystem is niet actief."/>
+        <text name="realSilo_dryerOffForSilo" text="Deze silo heeft geen droger (zie instellingen)."/>
+        <text name="realSilo_dryerNoFilledSlots" text="Geen gevulde vakken om te drogen."/>
+        <text name="input_REALSILO_DRYER" text="RealSilo drogen"/>
+        <text name="realSilo_dryerStateDrying" text="Drogend"/>
+        <text name="realSilo_dryerStateIdle" text="Inactief"/>
     </texts>
 </l10n>

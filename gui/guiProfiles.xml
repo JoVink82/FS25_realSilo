@@ -114,15 +114,46 @@
         <textSize value="19px"/>
         <textAlignment value="left"/>
         <textColor value="$preset_fs25_colorMainLight"/>
+        <!-- Vangnet: sommige ROW_TOGGLE-rijen (Drogen-pagina) tonen nu
+             extra info (vocht%/grade) achter de vaknaam; textMaxNumLines
+             zorgt dat zo'n iets langere regel netjes doorloopt i.p.v.
+             af te breken, zonder dat een normaal kort label hier last van heeft. -->
+        <textMaxNumLines value="2"/>
     </Profile>
 
-    <!-- Vlakke achtergrond achter het invoerveld (zonder fs25_textInput atlas-issues) -->
-    <Profile name="realSiloConfigInputBg" extends="baseReference" with="anchorTopLeft">
-        <imageColor value="1 1 1 0.10"/>
+    <!-- Brede variant van realSiloConfigRowLabel voor ROW_INFO/ROW_CALC:
+         lange zinnen (bv. "This silo contains product. Empty it first...")
+         liepen bij de smalle 290px rowLabel altijd af met "...", omdat
+         textMaxNumLines niet gezet was. Deze variant is bijna zo breed als
+         de hele rij en staat 2 regels toe. -->
+    <Profile name="realSiloConfigRowLabelWide" extends="baseReference" with="anchorTopLeft">
+        <textBold value="false"/>
+        <textSize value="17px"/>
+        <textAlignment value="left"/>
+        <textColor value="$preset_fs25_colorMainLight"/>
+        <textMaxNumLines value="2"/>
+    </Profile>
+
+    <!-- Vlakke achtergrond achter het invoerveld (zonder fs25_textInput atlas-issues).
+         with="anchorTopRight" staat HIER in het profiel, niet als instance-
+         override op het XML-element: een instance-level "with" op
+         GuiElement/TextInput bleek niet betrouwbaar te worden toegepast
+         (de widget bleef zijn "position" toepassen alsof hij nog
+         anchorTopLeft was, wat het vak bovenop het label liet landen i.p.v.
+         rechts uitgelijnd). De settings-widgets (fs25_settingsBinaryOption/
+         -MultiTextOption) werkten wél meteen goed, en die krijgen hun
+         anchorMiddleRight ook via het PROFIEL zelf, nooit als
+         instance-override — vandaar dezelfde aanpak hier. -->
+    <Profile name="realSiloConfigInputBg" extends="baseReference" with="anchorTopRight">
+        <!-- 0.10 was vrijwel onzichtbaar bij een LEEG veld (bv. "Naam:" op
+             een net toegevoegde silo) — de speler zag geen enkele
+             aanwijzing dat daar iets klikbaars stond. 0.22 blijft subtiel
+             maar is duidelijk herkenbaar als invoervak, ook zonder tekst. -->
+        <imageColor value="1 1 1 0.22"/>
     </Profile>
 
     <!-- Invoerveld: groene tekst voor contrast tegen de alternerende rijachtergrond -->
-    <Profile name="realSiloConfigInput" extends="fs25_textInput" with="anchorTopLeft">
+    <Profile name="realSiloConfigInput" extends="fs25_textInput" with="anchorTopRight">
         <textBold value="true"/>
         <textSize value="19px"/>
         <textAlignment value="left"/>
@@ -136,5 +167,9 @@
         <textAlignment value="center"/>
         <textColor value="$preset_fs25_colorMainHighlight"/>
     </Profile>
+
+    <!-- ROW_TOGGLE gebruikt het spel se eigen "fs25_binaryOption"-profiel
+         (native BinaryOption-element, zie sdk/xmlDoku/guiProfiles.xml en
+         RealSiloDialog.xml) — geen eigen profiel meer nodig hiervoor. -->
 
 </GUIProfiles>

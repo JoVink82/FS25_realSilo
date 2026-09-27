@@ -48,13 +48,49 @@
             <SmoothList profile="realSiloConfigList" id="configList"
                         position="50px -80px" size="730px 410px"
                         focusChangeTop="nil" focusChangeBottom="nil"
+                        onClick="onListClick"
                         visible="false">
                 <ListItem profile="realSiloConfigRow" name="configRowInput" size="715px 60px">
-                    <Text profile="realSiloConfigRowLabel" position="5px -10px" size="290px 40px" name="rowLabel"/>
-                    <GuiElement profile="realSiloConfigInputBg" position="305px -10px" size="230px 40px"/>
-                    <TextInput profile="realSiloConfigInput" position="305px -10px" size="230px 40px"
+                    <!-- Smal label (ROW_INPUT/ROW_TOGGLE): veldnaam links, waarde/
+                         widget rechts uitgelijnd (zie rowInput/rowToggle/rowStepper).
+                         410px i.p.v. de oude 290px: sinds de waarde-kolom rechts
+                         uitgelijnd is (max ~276px + marge) is er meer ruimte over
+                         links, wat ook nodig is voor de langere Drogen-rijlabels
+                         (vaknaam + vocht%/grade, zie buildDryerRows). -->
+                    <Text profile="realSiloConfigRowLabel" position="5px -10px" size="410px 40px" name="rowLabel"/>
+                    <!-- Breed label (ROW_INFO/ROW_CALC): lange zinnen mogen over
+                         de volle rijbreedte lopen en 2 regels beslaan i.p.v.
+                         afgekapt te worden met "...". Zie populateConfigCell. -->
+                    <Text profile="realSiloConfigRowLabelWide" position="5px -2px" size="700px 54px" name="rowLabelWide"/>
+                    <!-- Waarde-kolom rechts uitgelijnd tegen de rand van de rij.
+                         with="anchorTopRight" staat in het PROFIEL
+                         (realSiloConfigInputBg/realSiloConfigInput in
+                         guiProfiles.xml), niet hier als instance-override — zie
+                         de toelichting daar voor waarom dat de eerdere
+                         overlap-bug veroorzaakte. -->
+                    <GuiElement profile="realSiloConfigInputBg" position="-15px -10px" size="260px 40px"/>
+                    <TextInput profile="realSiloConfigInput" position="-15px -10px" size="260px 40px"
                                name="rowInput"
                                onIsUnicodeAllowed="onRowInputUnicode"/>
+                    <!-- ROW_TOGGLE: dezelfde natieve AAN/UIT-knop als FS25's eigen
+                         instellingenmenu (Traffic, Snow, ...). Profiel
+                         fs25_settingsBinaryOption (i.p.v. de kale fs25_binaryOption):
+                         dat is de door Giants zelf gebruikte "instellingenrij"-variant,
+                         die zichzelf met anchorMiddleRight tegen de rechterrand van de
+                         rij aanlijnt op zijn EIGEN, vaste breedte (276px). Een handmatige
+                         size-override (zoals hiervoor) knijpt het widget kleiner dan zijn
+                         interne knoppen nodig hebben, wat het afgekapte/overlopende
+                         uiterlijk gaf dat gemeld werd — vandaar geen eigen with/position/size
+                         hier, gewoon het kale profiel laten anchoren. -->
+                    <BinaryOption profile="fs25_settingsBinaryOption"
+                                  name="rowToggle" onClick="onClickConfigToggle"/>
+                    <!-- ROW_INPUT met stepper=true (bv. "Aantal silo's"): zelfde
+                         natieve pijltjes-selector als FS25's eigen instellingenmenu
+                         (bv. Running Multiplier "◄ 3X ►"). Profiel
+                         fs25_settingsMultiTextOption, om dezelfde reden als
+                         fs25_settingsBinaryOption hierboven. -->
+                    <MultiTextOption profile="fs25_settingsMultiTextOption"
+                                      name="rowStepper" onClick="onClickConfigStepper"/>
                 </ListItem>
             </SmoothList>
             <ThreePartBitmap profile="fs25_listSliderBox" id="configListSliderBox" position="-30px -17px" size="12px 410px" with="anchorTopRight" visible="false">
@@ -63,17 +99,27 @@
 
         </GuiElement>
 
-        <!-- Alle drie de knoppen op de originele systeemprofielen: dit is
-             de enige combinatie waarvan zeker is dat de breedtes samen
-             precies 600px vullen (geen overlap) EN dat de fysieke
-             X/ESC-toetsen echt werken (MENU_EXTRA_1 / MENU_BACK, dit zijn
-             vaste systeemtoetsen, geen eigen binding nodig). -->
-        <BoxLayout profile="fs25_dialogButtonBox" size="600px 60px">
+        <!-- Knoppen op de originele systeemprofielen (echte X/ESC-toetsen
+             via MENU_EXTRA_1/MENU_BACK, geen eigen binding nodig). Was
+             600px voor 3 knoppen ("precies vol, geen ruimte voor een 4e") —
+             dat was ons EIGEN gekozen size-attribuut, geen vaste
+             spel-limiet). fs25_dialogButtonBox rekt van zichzelf uit tot
+             (dialoogbreedte - 50px) = 860-50 = 810px (zie
+             absoluteSizeOffset in sdk/xmlDoku/guiProfiles.xml); 800px voor
+             4 knoppen + 3 separators past daar ruim binnen. -->
+        <BoxLayout profile="fs25_dialogButtonBox" size="800px 60px">
             <Button profile="buttonExtra1" id="buttonAction"
                     text="$l10n_realSilo_settings" onClick="onClickAction"/>
             <Bitmap  profile="fs25_dialogButtonBoxSeparator"/>
             <Button profile="buttonExtra1" id="buttonTransfer"
                     text="$l10n_realSilo_transfer" onClick="onClickTransfer"/>
+            <Bitmap  profile="fs25_dialogButtonBoxSeparator"/>
+            <!-- Nieuwe knop naast de bestaande G-toets (zie onOpen): zelfde
+                 aanpak als Transfer (knop + toets doen hetzelfde). Alleen
+                 zichtbaar op pagina 1 en als drogen echt bruikbaar is voor
+                 deze silo, zie showPage. -->
+            <Button profile="buttonExtra1" id="buttonDryer"
+                    text="$l10n_realSilo_dryerMenuTitle" onClick="onClickDryer"/>
             <Bitmap  profile="fs25_dialogButtonBoxSeparator"/>
             <Button profile="buttonBack" id="buttonClose"
                     text="$l10n_realSilo_close" onClick="onCancel"/>

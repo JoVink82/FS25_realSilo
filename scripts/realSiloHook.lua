@@ -289,12 +289,17 @@ local function loadAllSiloData()
             if scap then slotCaps[si] = scap end
             sc = sc + 1
         end
+        -- dryer: ontbreekt het attribuut helemaal (savegame van vóór deze
+        -- instelling bestond), dan blijft de silo een droger houden -
+        -- exact het gedrag van voor deze feature. Staat het attribuut er
+        -- wél (0 of 1), dan is dat de door de speler gekozen waarde.
+        local dryerSaved = getXMLInt(xmlFile, key .. "#dryer")
         data[uid] = {
             numCompartments        = getXMLInt(xmlFile, key .. "#numComps")    or 4,
             capacityPerCompartment = getXMLInt(xmlFile, key .. "#capPerComp") or 50000,
             isConfigured           = (configured == 1),
             locked                 = (getXMLInt(xmlFile, key .. "#locked") or 0) == 1,
-            hasDryer               = (getXMLInt(xmlFile, key .. "#dryer") or 0) == 1,
+            hasDryer               = (dryerSaved == nil) or (dryerSaved == 1),
             transferRate           = getXMLInt(xmlFile, key .. "#transferRate") or 1000,
             extensionRange         = getXMLInt(xmlFile, key .. "#extensionRange") or 50,
             totalStorageCapacity   = totalCap,
@@ -529,9 +534,9 @@ PlaceableSilo.onLoad = function(self, savegame)
             RealSiloUtil.resolveDisplayName(self, "realSilo_defaultName", "Silo"))
     end
     if cfg and cfg.isConfigured           then realSiloManager.setConfigured(uid) end
-    if cfg and cfg.hasDryer then
+    if cfg and cfg.hasDryer ~= nil then
         local s0 = realSiloManager.getSilo(uid)
-        if s0 then s0.config.hasDryer = true end
+        if s0 then s0.config.hasDryer = cfg.hasDryer end
     end
     if cfg and cfg.totalStorageCapacity   then
         local silo = realSiloManager.getSilo(uid)

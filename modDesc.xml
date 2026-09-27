@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8" standalone="no"?>
 <modDesc descVersion="113">
     <author>Jo_Vink</author>
-    <version>1.2.0.7</version>
+    <version>2.0.0.0</version>
     <title>
         <en>RealSilo – Realistic Silo Compartments</en>
         <nl>RealSilo – Realistische Silo Compartimenten</nl>
@@ -19,6 +19,11 @@ How it works:
 - In multiplayer only the admin (logged in via the multiplayer menu) can change the silo settings. Other players can use the silo normally and view the compartment overview.
 
 Please report problems on GitHub: https://github.com/JoVink82/FS25_realSilo
+
+Changelog 2.0.0.0:
+- New setting per silo: "Dryer available" on/off in the settings menu. When turned off, that silo's compartments no longer appear in FS25_MoistureSystem's Grain Drying menu at all. Defaults to on, so existing silos and savegames keep drying exactly as before unless you turn it off yourself. A silo model can also fix this permanently via the mod's dryer XML attribute, in which case it becomes read-only in the dialog.
+- Turning the dryer off for a silo that has a compartment actively drying now also stops that drying immediately, for every connected player.
+- New "Drying" page in the realSilo menu itself (press G while the menu is open) listing every compartment that currently holds crop, each with an on/off switch that starts or stops drying immediately - no need to open FS25_MoistureSystem's own Grain Drying menu separately.
 
 Changelog 1.2.0.7:
 - Fixed all compartments of all silos showing the same moisture/quality percentage for connected players after saving and restarting the server; the server now sends each compartment's own saved value.
@@ -87,6 +92,11 @@ Hoe het werkt:
 
 Problemen graag melden op GitHub: https://github.com/JoVink82/FS25_realSilo
 
+Changelog v2.0.0.0:
+- Nieuwe instelling per silo: "Droger beschikbaar" aan/uit in het instellingenmenu. Staat dit uit, dan verschijnen de vakken van die silo helemaal niet meer in het Grain Drying-menu van FS25_MoistureSystem. Standaard aan, zodat bestaande silo's en savegames gewoon blijven drogen zoals voorheen tenzij je het zelf uitzet. Een silomodel kan dit ook permanent vastleggen via het dryer-attribuut in de mod-XML; de instelling wordt dan read-only in de dialoog.
+- Droger uitzetten voor een silo waarvan een vak op dat moment actief aan het drogen is, stopt dat drogen nu ook meteen, voor alle verbonden spelers.
+- Nieuwe "Drogen"-pagina in het realSilo-menu zelf (druk op G terwijl het menu open is) met alle vakken die op dit moment product bevatten, elk met een eigen aan/uit-schakelaar die het drogen meteen start of stopt - niet meer nodig om apart het Grain Drying-menu van FS25_MoistureSystem te openen.
+
 Changelog v1.2.0.7:
 - Opgelost dat na opslaan en herstarten van de server alle vakken van alle silo's voor verbonden spelers hetzelfde vocht-/kwaliteitspercentage toonden; de server stuurt nu de eigen opgeslagen waarde van elk vak door.
 
@@ -151,6 +161,11 @@ So funktioniert es:
 - Im Multiplayer kann nur der Admin (uber das Multiplayer-Menu eingeloggt) die Silo-Einstellungen andern. Andere Spieler konnen den Silo normal nutzen und die Facherubersicht einsehen.
 
 Bitte melden Sie Probleme unter GitHub: https://github.com/JoVink82/FS25_realSilo
+
+Changelog v2.0.0.0:
+- Neue Einstellung pro Silo: "Trockner verfügbar" ein/aus im Einstellungsmenü. Ist dies ausgeschaltet, erscheinen die Fächer dieses Silos gar nicht mehr im Grain-Drying-Menü von FS25_MoistureSystem. Standardmäßig eingeschaltet, sodass bestehende Silos und Spielstände wie gewohnt weiter trocknen, sofern du es nicht selbst ausschaltest. Ein Silomodell kann dies auch über das dryer-Attribut in der Mod-XML dauerhaft festlegen; die Einstellung wird dann im Dialog schreibgeschützt.
+- Den Trockner für ein Silo auszuschalten, dessen Fach gerade aktiv trocknet, stoppt dieses Trocknen jetzt sofort, für alle verbundenen Spieler.
+- Neue Seite "Trocknen" im realSilo-Menü selbst (Taste G bei geöffnetem Menü) mit allen Fächern, die gerade Erntegut enthalten, jeweils mit einem eigenen Ein/Aus-Schalter, der das Trocknen sofort startet oder stoppt - das eigene Grain-Drying-Menü von FS25_MoistureSystem muss dafür nicht mehr separat geöffnet werden.
 
 Changelog v1.2.0.7:
 - Behoben, dass nach dem Speichern und Neustarten des Servers alle Fächer aller Silos für verbundene Spieler denselben Feuchtigkeits-/Qualitätswert anzeigten; der Server sendet jetzt den eigenen gespeicherten Wert jedes Fachs.
@@ -221,6 +236,11 @@ Changelog v1.1.0.1:
              nu veilig. De toets is aanpasbaar via Opties, Besturing. -->
         <action name="REALSILO_OPEN" axisType="HALF_POSITIVE_AXIS" triggerAlways="false" isSink="true" />
         <action name="REALSILO_TRANSFER" axisType="HALF_POSITIVE_AXIS" triggerAlways="false" isSink="true" />
+        <!-- Opent de Drogen-pagina in het realSilo-menu (zie RealSiloDialog.lua,
+             onClickDryer). Geen eigen footer-knop mogelijk (de 3 bestaande
+             knoppen vullen de knoppenbalk al precies), daarom net als
+             Transfer alleen via een toets bereikbaar. -->
+        <action name="REALSILO_DRYER" axisType="HALF_POSITIVE_AXIS" triggerAlways="false" isSink="true" />
     </actions>
     <inputBinding>
         <actionBinding action="REALSILO_OPEN">
@@ -228,6 +248,9 @@ Changelog v1.1.0.1:
         </actionBinding>
         <actionBinding action="REALSILO_TRANSFER">
             <binding device="KB_MOUSE_DEFAULT" input="KEY_t" />
+        </actionBinding>
+        <actionBinding action="REALSILO_DRYER">
+            <binding device="KB_MOUSE_DEFAULT" input="KEY_g" />
         </actionBinding>
     </inputBinding>
 
